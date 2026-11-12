@@ -3,23 +3,29 @@ name: Compilar
 
 on:
   push:
-    branches: [main]
+    branches: [main, "v*"]
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: compilar
+  group: compilar-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   simulador:
-    name: Compilar e fotografar no simulador
-    runs-on: macos-latest
+    name: Compilar e fotografar (${{ matrix.maquina }})
+    runs-on: ${{ matrix.maquina }}
     timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        # Dois tipos de Mac: vale o resultado do que conseguir uma máquina primeiro.
+        maquina: [macos-latest, macos-15-intel]
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      MAQUINA: ${{ matrix.maquina }}
     steps:
       - name: Baixar o código
         run: |
@@ -31,6 +37,9 @@ jobs:
 
       - name: Ambiente
         run: bash ci/ambiente.sh
+
+      - name: Testar a lógica
+        run: bash ci/testar-logica.sh
 
       - name: Compilar para o simulador
         run: bash ci/compilar.sh

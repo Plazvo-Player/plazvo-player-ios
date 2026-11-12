@@ -7,3 +7,5 @@ resultado/
 .DS_Store
 xcuserdata/
 *.ipa
+.build/
+*.log
