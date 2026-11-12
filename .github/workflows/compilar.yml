@@ -17,17 +17,20 @@ jobs:
   simulador:
     name: Compilar e fotografar (${{ matrix.maquina }})
     runs-on: ${{ matrix.maquina }}
-    timeout-minutes: 40
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         # Dois tipos de Mac: vale o resultado do que conseguir uma máquina primeiro.
         maquina: [macos-latest, macos-15-intel]
     env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       MAQUINA: ${{ matrix.maquina }}
     steps:
+      # A chave do repositório só vai para os dois passos que falam com ele (baixar o código e
+      # guardar o resultado); os outros passos, que rodam ferramentas de fora, não a recebem.
       - name: Baixar o código
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           AUTH="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\n')"
           git init -q .
@@ -45,8 +48,12 @@ jobs:
         run: bash ci/compilar.sh
 
       - name: Abrir no simulador e fotografar
+        # Se as fotos passarem do tempo, o que já saiu ainda é guardado no passo seguinte.
+        timeout-minutes: 45
         run: bash ci/fotografar.sh
 
       - name: Guardar o resultado
         if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bash ci/guardar.sh

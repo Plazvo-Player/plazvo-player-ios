@@ -57,13 +57,7 @@ struct AppEnvironment {
             fixedNow: fixedNow,
             typedCode: scene?.typedCode ?? "",
             start: {
-                SimulatorScenes.rotateIfAsked(request)
-                await (scene ?? .home).prepare(site, now: now())
-                await controller.start()
-                if let scene {
-                    await scene.play(on: controller)
-                }
-                await SimulatorScenes.markReady(request)
+                await SimulatorScenes.run(request, site: site, now: now(), controller: controller)
             }
         )
         #else

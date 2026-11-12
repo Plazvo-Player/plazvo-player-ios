@@ -179,6 +179,10 @@ private struct CodeField: View {
             try? await Task.sleep(nanoseconds: 350_000_000)
             if enabled { focused = true }
         }
+        .onChange(of: enabled) { enabled in
+            // Depois de um código que não ativou, o campo volta pronto para a correção.
+            if enabled { focused = true }
+        }
     }
 }
 

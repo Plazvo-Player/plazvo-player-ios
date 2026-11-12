@@ -3,12 +3,17 @@
 #
 # As cenas são as de Core/Sources/PlazvoCore/DemoScene.swift: a compilação do simulador abre a
 # cena pedida com "-PlazvoCena <nome>" e deita a tela com "-PlazvoDeitado sim". Quando a cena
-# está pronta, o app escreve Documents/cena.txt (a cena, a posição da tela e o tamanho da janela);
-# a foto só é tirada depois disso.
+# está pronta, o app escreve Documents/cena.txt (a cena, a posição da tela, o tamanho da janela e
+# o que estava aberto); a foto só é tirada depois disso, e só vale quando a tela parou de mudar.
+#
+# Além das fotos, fica em resultado/telas/fotos.txt uma linha por foto (quanto demorou e o que o
+# app disse), para achar o motivo quando uma foto sai errada.
 set -euo pipefail
 APP="build/Build/Products/Debug-iphonesimulator/PlazvoPlayer.app"
 ID_DO_APP="com.plazvo.player"
 mkdir -p resultado/telas
+DETALHES="resultado/telas/fotos.txt"
+: > "$DETALHES"
 FALHAS=0
 
 # Escolhe o simulador mais novo do tipo pedido (iPhone ou iPad): "udid|nome|sistema".
@@ -44,18 +49,37 @@ print("|".join(melhor[1:]))
 ' "$1"
 }
 
+# Deixa o simulador em português do Brasil: o teclado, a data e a hora da barra do alto saem como
+# num aparelho daqui. Tem de ser antes de ligar o simulador.
+idioma() { # $1 = udid
+  local pasta="$HOME/Library/Developer/CoreSimulator/Devices/$1/data/Library/Preferences"
+  local arquivo="$pasta/.GlobalPreferences.plist"
+  mkdir -p "$pasta"
+  if [ ! -f "$arquivo" ]; then plutil -create binary1 "$arquivo"; fi
+  plutil -replace AppleLanguages -json '["pt-BR"]' "$arquivo"
+  plutil -replace AppleLocale -string "pt_BR" "$arquivo"
+  plutil -replace AppleKeyboards -json '["pt_BR@sw=QWERTY;hw=Automatic"]' "$arquivo"
+}
+
 # Espera o simulador ligar e deixa-o pronto para as fotos, com o app instalado.
 preparar() { # $1 = udid
   xcrun simctl bootstatus "$1" -b > /dev/null
   xcrun simctl ui "$1" appearance dark || true
   xcrun simctl status_bar "$1" override --time "14:30" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4 || true
+  # Num simulador novo, o teclado abre com uma explicação por cima das teclas ("deslize o dedo
+  # para escrever"): fica marcada como já vista, e esse jeito de escrever, desligado.
+  xcrun simctl spawn "$1" defaults write com.apple.Preferences DidShowContinuousPathIntroduction -bool true || true
+  xcrun simctl spawn "$1" defaults write com.apple.keyboard.preferences DidShowContinuousPathIntroduction -bool true || true
+  xcrun simctl spawn "$1" defaults write com.apple.keyboard.ContinuousPath KeyboardContinuousPathEnabled -bool false || true
   xcrun simctl install "$1" "$APP"
 }
 
 # Abre o app numa cena, espera ela ficar pronta e tira a foto.
 foto() { # $1 = udid; $2 = nome da foto (sem .png); $3 = cena; $4 = "deitado" (opcional)
   local udid="$1" nome="$2" cena="$3" deitado="${4:-}"
-  local dados pronto espera=0 largura altura posicao
+  local dados pronto espera=0 largura altura posicao inicio pronta tiradas=1
+  local imagem="resultado/telas/$nome.png" anterior="resultado/telas/.anterior.png"
+  inicio="$(date +%s)"
   xcrun simctl terminate "$udid" "$ID_DO_APP" > /dev/null 2>&1 || true
   dados="$(xcrun simctl get_app_container "$udid" "$ID_DO_APP" data)"
   pronto="$dados/Documents/cena.txt"
@@ -74,25 +98,61 @@ foto() { # $1 = udid; $2 = nome da foto (sem .png); $3 = cena; $4 = "deitado" (o
     echo "Foto $nome: a cena \"$cena\" não ficou pronta em 90 segundos" | tee -a resultado/resumo.txt
     FALHAS=$((FALHAS + 1))
   fi
-  sleep 1
-  xcrun simctl io "$udid" screenshot "resultado/telas/$nome.png" > /dev/null 2>&1
-  cp "$pronto" "resultado/telas/$nome.txt" 2> /dev/null || true
+  pronta=$(( $(date +%s) - inicio ))
 
-  # A foto do simulador sai sempre com o aparelho em pé: com a tela deitada, a imagem é girada
-  # para o lado certo (o app diz no cena.txt para que lado deitou).
+  # A máquina da nuvem desenha devagar: a foto só vale com a tela parada, isto é, quando duas
+  # fotos seguidas saem iguais. (Com o cursor piscando no campo do código pode levar mais vezes.)
+  sleep 1
+  xcrun simctl io "$udid" screenshot "$imagem" > /dev/null 2>&1 || true
+  while [ "$tiradas" -lt 8 ]; do
+    cp "$imagem" "$anterior" 2> /dev/null || true
+    sleep 2
+    xcrun simctl io "$udid" screenshot "$imagem" > /dev/null 2>&1 || true
+    tiradas=$((tiradas + 1))
+    if cmp -s "$anterior" "$imagem"; then break; fi
+  done
+  rm -f "$anterior"
+  cp "$pronto" "resultado/telas/$nome.txt" 2> /dev/null || true
+  posicao="$(grep '^posicao=' "resultado/telas/$nome.txt" 2> /dev/null | cut -d= -f2 || true)"
+  echo "$nome: cena $cena; pronta em ${pronta}s; fotos até parar: $tiradas; ao todo $(( $(date +%s) - inicio ))s; $(cat "resultado/telas/$nome.txt" 2> /dev/null | tr '\n' ' ' || true)" >> "$DETALHES"
+
   if [ -n "$deitado" ]; then
-    largura="$(sips -g pixelWidth "resultado/telas/$nome.png" | awk '/pixelWidth/ {print $2}')"
-    altura="$(sips -g pixelHeight "resultado/telas/$nome.png" | awk '/pixelHeight/ {print $2}')"
-    posicao="$(grep '^posicao=' "resultado/telas/$nome.txt" 2> /dev/null | cut -d= -f2 || true)"
-    if [ "$altura" -gt "$largura" ]; then
-      case "$posicao" in
-        deitado-direita) sips -r 270 "resultado/telas/$nome.png" > /dev/null ;;
-        deitado-esquerda) sips -r 90 "resultado/telas/$nome.png" > /dev/null ;;
-        *) echo "Foto $nome: o simulador não deitou a tela (posição: ${posicao:-não informada})" | tee -a resultado/resumo.txt ;;
-      esac
-    fi
+    case "$posicao" in
+      deitado-direita | deitado-esquerda)
+        # A foto do simulador pode sair com o aparelho em pé: aí a imagem é girada para o lado
+        # certo (o app diz no cena.txt para que lado deitou).
+        largura="$(sips -g pixelWidth "$imagem" | awk '/pixelWidth/ {print $2}')"
+        altura="$(sips -g pixelHeight "$imagem" | awk '/pixelHeight/ {print $2}')"
+        if [ "$altura" -gt "$largura" ]; then
+          if [ "$posicao" = "deitado-direita" ]; then
+            sips -r 270 "$imagem" > /dev/null
+          else
+            sips -r 90 "$imagem" > /dev/null
+          fi
+        fi
+        ;;
+      *)
+        # Não deitou: a foto seria igual à da tela em pé, e fica de fora.
+        echo "Foto $nome: o simulador não deitou a tela (posição: ${posicao:-não informada}); ficou de fora" | tee -a resultado/resumo.txt
+        rm -f "$imagem" "resultado/telas/$nome.txt"
+        ;;
+    esac
   fi
   xcrun simctl terminate "$udid" "$ID_DO_APP" > /dev/null 2>&1 || true
+}
+
+# No iPad o app não consegue deitar a tela sozinho (o iPad só deita quando o aparelho é girado),
+# e não existe comando para girar o simulador: só o menu do aplicativo Simulador (Device ›
+# Rotate Left). É uma tentativa: se não der, as fotos deitadas do iPad ficam de fora.
+deitar_ipad() { # $1 = udid
+  local xcode="${DEVELOPER_DIR:-$(xcode-select -p)}"
+  open "$xcode/Applications/Simulator.app" --args -CurrentDeviceUDID "$1" || return 1
+  sleep 25
+  perl -e 'alarm 90; exec @ARGV' osascript \
+    -e 'tell application "Simulator" to activate' \
+    -e 'delay 3' \
+    -e 'tell application "System Events" to tell process "Simulator" to click menu item "Rotate Left" of menu "Device" of menu bar 1' \
+    > /dev/null 2>> "$DETALHES"
 }
 
 IPHONE=""
@@ -113,12 +173,17 @@ if [ -z "$IPHONE" ] && [ -z "$IPAD" ]; then
   exit 1
 fi
 
+for UDID in $IPHONE $IPAD; do
+  idioma "$UDID" || echo "Idioma do simulador: não deu para pôr em português (as fotos saem assim mesmo)" | tee -a resultado/resumo.txt
+done
+
 # Ligar o simulador é a parte demorada: os dois começam a ligar juntos.
 if [ -n "$IPHONE" ]; then xcrun simctl boot "$IPHONE" || true; fi
 if [ -n "$IPAD" ]; then xcrun simctl boot "$IPAD" || true; fi
 
 if [ -n "$IPHONE" ]; then
   preparar "$IPHONE"
+  echo "iPhone pronto $(( SECONDS / 60 )) min depois do começo" >> "$DETALHES"
   foto "$IPHONE" "iphone-01-inicial" "inicial"
   foto "$IPHONE" "iphone-02-conta" "conta"
   foto "$IPHONE" "iphone-03-codigo" "codigo"
@@ -140,12 +205,27 @@ fi
 
 if [ -n "$IPAD" ]; then
   preparar "$IPAD"
+  echo "iPad pronto $(( SECONDS / 60 )) min depois do começo" >> "$DETALHES"
   foto "$IPAD" "ipad-1-inicial" "inicial"
   foto "$IPAD" "ipad-2-conta" "conta"
   foto "$IPAD" "ipad-3-ativo" "ativo"
-  foto "$IPAD" "ipad-deitado-1-ativo" "ativo" deitado
-  foto "$IPAD" "ipad-deitado-2-conta" "conta" deitado
+  foto "$IPAD" "ipad-4-codigo" "codigo"
+  if deitar_ipad "$IPAD"; then
+    sleep 5
+    foto "$IPAD" "ipad-deitado-1-ativo" "ativo" deitado
+    foto "$IPAD" "ipad-deitado-2-conta" "conta" deitado
+  else
+    echo "iPad deitado: não deu para girar o simulador; as fotos deitadas do iPad ficaram de fora" | tee -a resultado/resumo.txt
+  fi
   xcrun simctl shutdown "$IPAD" || true
+fi
+
+# Se o app caiu em alguma cena, o começo do relatório da queda vai junto, para achar o motivo.
+RELATORIOS="$HOME/Library/Logs/DiagnosticReports"
+QUEDAS="$(ls "$RELATORIOS" 2> /dev/null | grep -c '^PlazvoPlayer' || true)"
+if [ "${QUEDAS:-0}" -gt 0 ]; then
+  echo "Quedas do app no simulador: $QUEDAS" | tee -a resultado/resumo.txt
+  head -c 30000 "$(ls -t "$RELATORIOS"/PlazvoPlayer* | head -n 1)" > resultado/queda-do-app.txt || true
 fi
 
 echo "Fotos: $(ls resultado/telas | grep -c '\.png$') — $(ls resultado/telas | grep '\.png$' | tr '\n' ' ')" | tee -a resultado/resumo.txt
