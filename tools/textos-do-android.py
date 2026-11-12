@@ -6,6 +6,7 @@ Uso: python3 tools/textos-do-android.py <pasta res do app Android> <pasta App/Re
 Só entram as chaves da lista CHAVES (as telas que este app já tem). Os quatro idiomas do
 Android viram: values -> en, values-pt -> pt-BR, values-pt-rPT -> pt-PT, values-es -> es.
 Texto que um idioma não traduz (marcado no Android como não traduzível) vem do inglês.
+Os textos que só este app tem ficam na tabela EXTRAS, já nos quatro idiomas.
 """
 import pathlib
 import re
@@ -30,6 +31,23 @@ new_key_title new_key_text new_key_confirm
 unlink_title unlink_text unlink_not_linked unlink_confirm unlink_sending unlink_done
 unlink_was_not_linked unlink_unavailable
 """.split()
+
+# Textos que só este app tem (o app Android ainda não tem a função). Quando o Android ganhar o
+# mesmo texto, a chave sai daqui e entra em CHAVES.
+EXTRAS = {
+    # Botão de copiar ao lado do ID e da chave (pedido do dono em 12/11/2026).
+    "device_copy_id": {"en": "Copy ID", "pt-BR": "Copiar o ID", "pt-PT": "Copiar o ID", "es": "Copiar el ID"},
+    "device_copy_key": {"en": "Copy key", "pt-BR": "Copiar a chave", "pt-PT": "Copiar a chave", "es": "Copiar la clave"},
+    "device_id_copied": {"en": "ID copied", "pt-BR": "ID copiado", "pt-PT": "ID copiado", "es": "ID copiado"},
+    "device_key_copied": {"en": "Key copied", "pt-BR": "Chave copiada", "pt-PT": "Chave copiada", "es": "Clave copiada"},
+    # A chave nova não pôde ser guardada no cofre do aparelho (o mesmo aviso do app de Windows).
+    "new_key_failed": {
+        "en": "The new key could not be saved. The key is still the same.",
+        "pt-BR": "Não foi possível guardar a chave nova. A chave continua a mesma.",
+        "pt-PT": "Não foi possível guardar a chave nova. A chave continua a mesma.",
+        "es": "No se pudo guardar la clave nueva. La clave sigue siendo la misma.",
+    },
+}
 
 
 def texto_do_android(valor: str) -> str:
@@ -75,6 +93,10 @@ def main() -> None:
                     faltam.append(nome)
                     continue
                 linhas.append(f'"{nome}" = "{para_strings(valor)}";')
+        for chave, traducoes in EXTRAS.items():
+            if chave in textos or chave in ingles:
+                sys.exit(f"{chave}: o Android já tem este texto; tire-o de EXTRAS e ponha em CHAVES")
+            linhas.append(f'"{chave}" = "{para_strings(traducoes[idioma])}";')
         if faltam:
             sys.exit(f"{idioma}: faltam os textos {faltam}")
         pasta_do_idioma = destino / f"{idioma}.lproj"

@@ -63,3 +63,8 @@
 "unlink_done" = "Listo. Este dispositivo salió del panel del socio. Tus listas y tu activación siguen.";
 "unlink_was_not_linked" = "Este dispositivo no estaba en el panel de ningún socio. No cambió nada.";
 "unlink_unavailable" = "Esta opción aún no está disponible. Inténtalo de nuevo más tarde.";
+"device_copy_id" = "Copiar el ID";
+"device_copy_key" = "Copiar la clave";
+"device_id_copied" = "ID copiado";
+"device_key_copied" = "Clave copiada";
+"new_key_failed" = "No se pudo guardar la clave nueva. La clave sigue siendo la misma.";

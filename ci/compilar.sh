@@ -37,3 +37,34 @@ if grep -R -a -q "api.plazvo.com" "$APP"; then
   exit 1
 fi
 echo "Conferência do servidor: o app do simulador não tem o endereço api.plazvo.com" | tee -a resultado/resumo.txt
+
+# O app do aparelho (o que fala com o servidor de verdade) também tem de compilar. Sai sem
+# assinatura: não dá para instalar; serve para provar que o código do aparelho compila.
+set +e
+xcodebuild \
+  -project PlazvoPlayer.xcodeproj -scheme PlazvoPlayer -configuration Debug \
+  -sdk iphoneos -destination 'generic/platform=iOS' \
+  -derivedDataPath build-aparelho \
+  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build > build-aparelho.log 2>&1
+CODIGO=$?
+set -e
+
+grep -E "(error|warning): " build-aparelho.log | sort -u > resultado/avisos-e-erros-aparelho.txt || true
+
+if [ "$CODIGO" -ne 0 ]; then
+  echo "Compilação para o aparelho: FALHOU (código $CODIGO)" | tee -a resultado/resumo.txt
+  cat resultado/avisos-e-erros-aparelho.txt
+  tail -n 40 build-aparelho.log | tee resultado/fim-do-registro-aparelho.txt
+  exit 1
+fi
+echo "Compilação para o aparelho (sem assinatura): deu certo" | tee -a resultado/resumo.txt
+
+APARELHO="build-aparelho/Build/Products/Debug-iphoneos/PlazvoPlayer.app"
+test -d "$APARELHO"
+
+# O contrário da conferência do simulador: o app do aparelho tem de levar o endereço do servidor.
+if ! grep -R -a -q "api.plazvo.com" "$APARELHO"; then
+  echo "Conferência do servidor: FALHOU, o app do aparelho não tem o endereço api.plazvo.com" | tee -a resultado/resumo.txt
+  exit 1
+fi
+echo "Conferência do servidor: o app do aparelho tem o endereço api.plazvo.com" | tee -a resultado/resumo.txt

@@ -133,6 +133,14 @@ public func formattedActivationCode(_ normalized: String) -> String {
 /// Quantas letras e números tem um código de ativação.
 public let activationCodeLength = 12
 
+/// O campo do código guarda só as letras e os números, em maiúsculas (os traços são desenho).
+/// Devolve o que fica no campo depois de o usuário digitar ou colar `text`, ou `nil` se não cabe
+/// (mais letras e números do que um código tem): aí o campo fica como estava.
+public func acceptedActivationCodeInput(_ text: String) -> String? {
+    let clean = normalizeActivationCode(text)
+    return clean.count <= activationCodeLength ? clean : nil
+}
+
 /// Lê a resposta de `POST /device/activate-code`. Lança se não for um objeto JSON.
 public func parseCodeAnswer(_ text: String) throws -> CodeAnswer {
     guard let fields = try JSONValue.parse(text).fields else { throw AnswerFormatError(field: "") }

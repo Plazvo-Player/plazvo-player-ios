@@ -63,3 +63,8 @@
 "unlink_done" = "Pronto. Este aparelho saiu do painel do parceiro. Suas listas e sua ativação continuam.";
 "unlink_was_not_linked" = "Este aparelho não estava no painel de nenhum parceiro. Nada mudou.";
 "unlink_unavailable" = "Esta opção ainda não está disponível. Tente de novo mais tarde.";
+"device_copy_id" = "Copiar o ID";
+"device_copy_key" = "Copiar a chave";
+"device_id_copied" = "ID copiado";
+"device_key_copied" = "Chave copiada";
+"new_key_failed" = "Não foi possível guardar a chave nova. A chave continua a mesma.";

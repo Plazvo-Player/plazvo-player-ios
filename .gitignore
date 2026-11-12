@@ -2,6 +2,7 @@
 *.xcodeproj
 *.xcworkspace
 build/
+build-aparelho/
 DerivedData/
 resultado/
 .DS_Store

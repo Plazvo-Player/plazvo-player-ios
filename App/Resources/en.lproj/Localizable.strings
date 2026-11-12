@@ -63,3 +63,8 @@
 "unlink_done" = "Done. This device left the partner’s panel. Your lists and your activation stay.";
 "unlink_was_not_linked" = "This device was not in any partner’s panel. Nothing changed.";
 "unlink_unavailable" = "This option isn’t available yet. Try again later.";
+"device_copy_id" = "Copy ID";
+"device_copy_key" = "Copy key";
+"device_id_copied" = "ID copied";
+"device_key_copied" = "Key copied";
+"new_key_failed" = "The new key could not be saved. The key is still the same.";
