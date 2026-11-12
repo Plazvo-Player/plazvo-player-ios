@@ -1,0 +1,43 @@
+# Compila o app num Mac da nuvem, abre no simulador e guarda as fotos das telas.
+name: Compilar
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: compilar
+  cancel-in-progress: true
+
+jobs:
+  simulador:
+    name: Compilar e fotografar no simulador
+    runs-on: macos-latest
+    timeout-minutes: 40
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Baixar o código
+        run: |
+          AUTH="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\n')"
+          git init -q .
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $AUTH" \
+            fetch -q --depth 1 "https://github.com/${GITHUB_REPOSITORY}.git" "$GITHUB_SHA"
+          git checkout -q FETCH_HEAD
+
+      - name: Ambiente
+        run: bash ci/ambiente.sh
+
+      - name: Compilar para o simulador
+        run: bash ci/compilar.sh
+
+      - name: Abrir no simulador e fotografar
+        run: bash ci/fotografar.sh
+
+      - name: Guardar o resultado
+        if: always()
+        run: bash ci/guardar.sh
