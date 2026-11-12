@@ -140,7 +140,7 @@ public struct HttpSiteApi: SiteApi {
 }
 
 /// A API não redireciona; seguir um redirecionamento levaria o segredo do aparelho para outro lugar.
-private final class NoRedirects: NSObject, URLSessionTaskDelegate {
+final class NoRedirects: NSObject, URLSessionTaskDelegate {
     func urlSession(
         _ session: URLSession,
         task: URLSessionTask,
