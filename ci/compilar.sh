@@ -32,7 +32,8 @@ APP="build/Build/Products/Debug-iphonesimulator/PlazvoPlayer.app"
 test -d "$APP"
 
 # Regra do projeto: o app do simulador nunca leva o endereço do servidor de verdade.
-if grep -R -a -q "api.plazvo.com" "$APP"; then
+# (LC_ALL=C e -a: procura byte a byte, também dentro dos arquivos que não são texto.)
+if LC_ALL=C grep -R -a -q -F "api.plazvo.com" "$APP"; then
   echo "Conferência do servidor: FALHOU, o app do simulador tem o endereço api.plazvo.com" | tee -a resultado/resumo.txt
   exit 1
 fi
@@ -63,8 +64,15 @@ APARELHO="build-aparelho/Build/Products/Debug-iphoneos/PlazvoPlayer.app"
 test -d "$APARELHO"
 
 # O contrário da conferência do simulador: o app do aparelho tem de levar o endereço do servidor.
-if ! grep -R -a -q "api.plazvo.com" "$APARELHO"; then
+if ! LC_ALL=C grep -R -a -q -F "api.plazvo.com" "$APARELHO"; then
   echo "Conferência do servidor: FALHOU, o app do aparelho não tem o endereço api.plazvo.com" | tee -a resultado/resumo.txt
   exit 1
 fi
 echo "Conferência do servidor: o app do aparelho tem o endereço api.plazvo.com" | tee -a resultado/resumo.txt
+
+# E o app do aparelho não leva o que é só das fotos e dos testes (as cenas e o servidor de mentira).
+if LC_ALL=C grep -R -a -q -F -e "PlazvoCena" -e "PlazvoDeitado" "$APARELHO"; then
+  echo "Conferência das cenas: FALHOU, o app do aparelho tem as cenas das fotos" | tee -a resultado/resumo.txt
+  exit 1
+fi
+echo "Conferência das cenas: o app do aparelho não tem as cenas das fotos" | tee -a resultado/resumo.txt

@@ -13,7 +13,7 @@ public final class DeviceIdentityStore {
         public init() {}
     }
 
-    private struct Stored: Codable, Equatable {
+    private struct Stored: Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
         var id: String
         var key: String
         var secret: String
@@ -21,6 +21,11 @@ public final class DeviceIdentityStore {
         var isValid: Bool {
             DeviceIdGenerator.isValidId(id) && DeviceIdGenerator.isValidKey(key) && DeviceIdGenerator.isValidSecret(secret)
         }
+
+        // O segredo nunca pode ir parar num registro por descuido.
+        var description: String { "Stored(id: \(id))" }
+        var debugDescription: String { description }
+        var customMirror: Mirror { Mirror(self, children: ["id": id]) }
     }
 
     private let store: SecureStore

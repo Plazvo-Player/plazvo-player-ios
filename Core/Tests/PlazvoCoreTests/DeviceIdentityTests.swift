@@ -137,4 +137,15 @@ struct DeviceIdentityTests {
             #expect(!text.contains(credentials.key))
         }
     }
+
+    @Test("o segredo não aparece ao mostrar o que o guardador da identidade tem dentro")
+    func storedSecretIsNotPrinted() throws {
+        let store = DeviceIdentityStore(store: InMemorySecureStore(), random: predictableRandom(seed: 13))
+        let secret = try store.credentials().secret
+        var dumped = ""
+        dump(store, to: &dumped)
+        // O mostrador chegou até o que está guardado (o ID aparece), mas não ao segredo.
+        #expect(dumped.contains(try store.credentials().id))
+        #expect(!dumped.contains(secret))
+    }
 }

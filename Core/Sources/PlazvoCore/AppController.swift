@@ -180,6 +180,8 @@ public final class AppController {
     /// "Gerar nova chave" (depois da pergunta): troca a chave e leva a nova ao servidor. Se o cofre
     /// não gravar, a chave continua a mesma e a tela avisa.
     public func confirmNewKey() async {
+        // Só com a caixa da pergunta aberta: dois toques seguidos no botão trocam a chave uma vez só.
+        guard state.dialog == .newKey else { return }
         closeDialog()
         do {
             try identityStore.rotateKey()

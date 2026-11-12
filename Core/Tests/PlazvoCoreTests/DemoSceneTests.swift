@@ -34,6 +34,11 @@ struct DemoSceneTests {
         }
     }
 
+    @Test("só as cenas que terminam com a caixa do código aberta esperam pelo teclado")
+    func scenesWithKeyboard() {
+        #expect(DemoScene.allCases.filter(\.showsKeyboard) == [.code, .wrongCode])
+    }
+
     @Test("a hora das fotos é 14:30 do dia, no fuso do aparelho")
     func photoTime() {
         let night = parseServerTime("2026-11-12T02:10:45Z")!

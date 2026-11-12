@@ -46,7 +46,13 @@ public struct FileCopyStore: CopyStore {
         var values = URLResourceValues()
         values.isExcludedFromBackup = true
         var target = url
-        try? target.setResourceValues(values)
+        do {
+            try target.setResourceValues(values)
+        } catch {
+            // Sem a marca, a cópia (que traz usuário e senha) iria para as cópias de segurança do
+            // aparelho: melhor ficar sem ela (o app pede tudo de novo ao servidor).
+            delete()
+        }
         #endif
     }
 

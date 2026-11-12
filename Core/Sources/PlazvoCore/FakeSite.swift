@@ -1,5 +1,7 @@
 import Foundation
 
+// Fica de fora do app do aparelho de verdade: só os testes e a compilação do simulador usam.
+#if !os(iOS) || targetEnvironment(simulator)
 /// O servidor de mentira, dentro do próprio app. Guarda os aparelhos que se registram e responde
 /// como o contrato da API (v1) manda, passando pelo mesmo leitor de respostas que o app usa com o
 /// servidor de verdade.
@@ -245,3 +247,4 @@ public func formatServerTime(_ date: Date) -> String {
     let yearText = String(repeating: "0", count: max(0, 4 - String(year).count)) + String(year)
     return "\(yearText)-\(two(parts.month))-\(two(parts.day))T\(two(parts.hour)):\(two(parts.minute)):\(two(parts.second))Z"
 }
+#endif

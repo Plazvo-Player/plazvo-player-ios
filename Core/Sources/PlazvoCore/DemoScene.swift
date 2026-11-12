@@ -1,5 +1,7 @@
 import Foundation
 
+// Fica de fora do app do aparelho de verdade: só os testes e a compilação do simulador usam.
+#if !os(iOS) || targetEnvironment(simulator)
 /// As cenas que a compilação do simulador sabe abrir, para as fotos das telas: cada uma deixa o
 /// servidor de mentira e o app numa situação, pelos mesmos caminhos dos toques do usuário.
 /// O app do aparelho de verdade não usa nada daqui.
@@ -105,6 +107,11 @@ public enum DemoScene: String, CaseIterable, Sendable {
         }
     }
 
+    /// A cena termina com o teclado na tela: a caixa do código aberta, à espera do usuário.
+    public var showsKeyboard: Bool {
+        self == .code || self == .wrongCode
+    }
+
     /// Leva o app à situação da cena. Chamar depois da consulta de abertura (`AppController.start`).
     @MainActor
     public func play(on app: AppController) async {
@@ -158,3 +165,4 @@ public struct DemoRequest: Equatable, Sendable {
         }
     }
 }
+#endif

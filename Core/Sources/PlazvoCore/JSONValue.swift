@@ -30,9 +30,50 @@ enum JSONValue: Decodable, Equatable {
         }
     }
 
-    /// Lê um texto JSON. Lança se não for JSON.
+    /// As respostas da API têm três níveis (objeto › lista › objeto). Muito mais que isso é
+    /// resposta estranha, e ler um texto com milhares de níveis derrubaria o app.
+    static let maxDepth = 16
+
+    /// O texto tem listas e objetos demais, uns dentro dos outros.
+    struct TooDeep: Error, Equatable {}
+
+    /// Lê um texto JSON. Lança se não for JSON ou se passar de `maxDepth` níveis.
     static func parse(_ text: String) throws -> JSONValue {
-        try JSONDecoder().decode(JSONValue.self, from: Data(text.utf8))
+        guard nestingDepth(of: text) <= maxDepth else { throw TooDeep() }
+        return try JSONDecoder().decode(JSONValue.self, from: Data(text.utf8))
+    }
+
+    /// Quantos níveis de listas e objetos, uns dentro dos outros, o texto chega a abrir (o que
+    /// está entre aspas não conta).
+    static func nestingDepth(of text: String) -> Int {
+        var depth = 0
+        var deepest = 0
+        var inString = false
+        var escaped = false
+        for byte in text.utf8 {
+            if inString {
+                if escaped {
+                    escaped = false
+                } else if byte == UInt8(ascii: "\\") {
+                    escaped = true
+                } else if byte == UInt8(ascii: "\"") {
+                    inString = false
+                }
+                continue
+            }
+            switch byte {
+            case UInt8(ascii: "\""):
+                inString = true
+            case UInt8(ascii: "["), UInt8(ascii: "{"):
+                depth += 1
+                deepest = max(deepest, depth)
+            case UInt8(ascii: "]"), UInt8(ascii: "}"):
+                depth -= 1
+            default:
+                break
+            }
+        }
+        return deepest
     }
 
     /// Os campos, se o valor é um objeto.

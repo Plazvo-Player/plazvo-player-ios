@@ -69,9 +69,52 @@ struct SiteAnswerTests {
         #"{"active": "talvez"}"#,
         #"{"active": true, "expires_at": "amanhã"}"#,
         #"{"active": true, "expires_at": "2027-02-31T10:00:00Z"}"#,
+        #"{"active": true, "expires_at": ""}"#,
+        #"{"active": true, "expires_at": 20271002}"#,
+        #"{"active": true, "expires_at": true}"#,
+        #"{"active": true, "expires_at": {}}"#,
+        #"{"active": true, "expires_at": []}"#,
+        #"{"active": true, "expires_at": ["2027-10-02T22:40:23Z"]}"#,
     ])
     func rejectsBrokenAnswers(text: String) {
         #expect(throws: (any Error).self) { try parsePlaylistsAnswer(text) }
+    }
+
+    @Test("resposta com listas e objetos demais, uns dentro dos outros, é recusada sem ser lida")
+    func rejectsTooDeepAnswers() throws {
+        func nested(_ levels: Int) -> String {
+            String(repeating: "[", count: levels) + String(repeating: "]", count: levels)
+        }
+        // O objeto de fora conta um nível: até o limite passa, um a mais não.
+        let allowed = #"{"active": true, "extra": "# + nested(JSONValue.maxDepth - 1) + "}"
+        let tooDeep = #"{"active": true, "extra": "# + nested(JSONValue.maxDepth) + "}"
+        #expect(try parsePlaylistsAnswer(allowed).active)
+        #expect(throws: JSONValue.TooDeep.self) { try parsePlaylistsAnswer(tooDeep) }
+        #expect(throws: JSONValue.TooDeep.self) { try parseCodeAnswer(#"{"days": "# + nested(100_000) + "}") }
+        #expect(throws: JSONValue.TooDeep.self) { try parseUnlinkAnswer(String(repeating: #"{"a":"#, count: 100_000)) }
+
+        // O que está entre aspas não conta, nem com aspas e barras dentro do texto.
+        let brackets = String(repeating: "[{", count: 200)
+        let inText = #"{"active": true, "name": ""# + brackets + #" \" "# + brackets + #" \\", "playlists": []}"#
+        #expect(try parsePlaylistsAnswer(inText).active)
+        #expect(JSONValue.nestingDepth(of: inText) == 2)
+        #expect(JSONValue.nestingDepth(of: "") == 0)
+        #expect(JSONValue.nestingDepth(of: #"{"a": [1, {"b": []}], "c": {}}"#) == 4)
+    }
+
+    @Test("a resposta das listas não mostra o texto recebido (com usuário e senha) em texto nenhum")
+    func answerIsNotPrinted() throws {
+        let text = #"{"active": true, "playlists": [{"id": 7, "name": "Casa", "type": "xtream", "url": "http://servidor.exemplo:8080", "username": "ana", "password": "segredo"}]}"#
+        let answer = try parsePlaylistsAnswer(text)
+        var dumped = ""
+        dump(answer, to: &dumped)
+        for printed in ["\(answer)", String(describing: answer), String(reflecting: answer), dumped, "\([answer])", "\(Optional(answer) as Any)"] {
+            #expect(!printed.contains("segredo"))
+            #expect(!printed.contains("ana"))
+            #expect(!printed.contains("servidor.exemplo"))
+        }
+        // O texto continua lá para a cópia guardada.
+        #expect(answer.raw == text)
     }
 
     @Test("verdadeiro e falso como texto são aceitos, como no app Android")

@@ -53,7 +53,7 @@ public struct SitePlaylist: Equatable, Sendable, CustomStringConvertible, Custom
 }
 
 /// Resposta do servidor ao pedido das listas.
-public struct PlaylistsAnswer: Equatable, Sendable {
+public struct PlaylistsAnswer: Equatable, Sendable, CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
     public let active: Bool
     /// Fim da ativação. `nil` se o aparelho nunca foi ativado.
     public let expiresAt: Date?
@@ -64,6 +64,11 @@ public struct PlaylistsAnswer: Equatable, Sendable {
     public let raw: String
     /// Um parceiro cuida deste aparelho pelo painel; `nil` quando o servidor não informou.
     public let partner: Bool?
+
+    // O texto recebido traz o usuário e a senha das listas: nunca pode ir parar num registro por descuido.
+    public var description: String { "PlaylistsAnswer(active: \(active), playlists: \(playlists.count))" }
+    public var debugDescription: String { description }
+    public var customMirror: Mirror { Mirror(self, children: ["active": active, "playlists": playlists.count]) }
 }
 
 /// Resposta do servidor a um código de ativação aceito (`POST /device/activate-code`).
@@ -191,10 +196,13 @@ public func parsePlaylistsAnswer(_ text: String) throws -> PlaylistsAnswer {
         }
     }
 
-    // Fim da ativação que não dá para entender não pode virar "sem fim".
+    // Fim da ativação que não dá para entender não pode virar "sem fim": só o campo que falta
+    // ou vem nulo quer dizer "sem fim"; lista, objeto ou data errada são resposta errada.
     var expiresAt: Date?
-    if let value = fields.text("expires_at") {
-        guard let date = parseServerTime(value) else { throw AnswerFormatError(field: "expires_at") }
+    if let field = fields["expires_at"], field != .null {
+        guard let value = field.text, let date = parseServerTime(value) else {
+            throw AnswerFormatError(field: "expires_at")
+        }
         expiresAt = date
     }
 

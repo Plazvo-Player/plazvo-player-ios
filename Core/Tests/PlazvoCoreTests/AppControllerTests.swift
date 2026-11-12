@@ -222,6 +222,22 @@ struct AppControllerTests {
         #expect(await bench.site.calls == calls)
     }
 
+    @Test("nova chave: o segundo toque seguido no botão não troca a chave outra vez")
+    func newKeyTappedTwice() async throws {
+        await bench.app.start()
+        bench.app.openNewKeyDialog()
+        await bench.app.confirmNewKey()
+        let first = try #require(bench.state.identity)
+        let calls = await bench.site.calls
+
+        // O segundo toque chega com a caixa já fechada.
+        await bench.app.confirmNewKey()
+
+        #expect(bench.state.identity == first)
+        #expect(await bench.site.calls == calls)
+        #expect(bench.state.notice == nil)
+    }
+
     // MARK: - Desconectar do painel
 
     @Test("desconectar do painel: o aparelho sai do painel e a caixa mostra o resultado até ser fechada")
