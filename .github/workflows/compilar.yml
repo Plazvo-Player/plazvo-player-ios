@@ -26,8 +26,8 @@ jobs:
     env:
       MAQUINA: ${{ matrix.maquina }}
     steps:
-      # A chave do repositório só vai para os dois passos que falam com ele (baixar o código e
-      # guardar o resultado); os outros passos, que rodam ferramentas de fora, não a recebem.
+      # A chave do repositório só vai para os passos que falam com ele (baixar o código, guardar
+      # o pacote e guardar o resultado); os outros, que rodam ferramentas de fora, não a recebem.
       - name: Baixar o código
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -49,6 +49,17 @@ jobs:
 
       - name: Compilar para o simulador
         run: bash ci/compilar.sh
+
+      - name: Montar o pacote do aparelho
+        # Se o pacote não sair, as fotos são tiradas do mesmo jeito (o resumo diz o que houve).
+        continue-on-error: true
+        run: bash ci/pacote.sh
+
+      - name: Guardar o pacote do aparelho
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash ci/guardar-pacote.sh
 
       - name: Abrir no simulador e fotografar
         # Se as fotos passarem do tempo, o que já saiu ainda é guardado no passo seguinte.

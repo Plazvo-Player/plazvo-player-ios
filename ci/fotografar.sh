@@ -61,9 +61,24 @@ idioma() { # $1 = udid
   plutil -replace AppleKeyboards -json '["pt_BR@sw=QWERTY;hw=Automatic"]' "$arquivo"
 }
 
-# Espera o simulador ligar e deixa-o pronto para as fotos, com o app instalado.
+# Liga o simulador e espera ele terminar de ligar. Se passar do limite (12 minutos), o simulador é
+# desligado e ligado outra vez; se nem assim ligar, devolve 1 e as fotos desse aparelho ficam de fora.
+LIMITE_PARA_LIGAR="${LIMITE_PARA_LIGAR:-720}"
+ligar() { # $1 = udid
+  local tentativa
+  for tentativa in 1 2; do
+    xcrun simctl boot "$1" > /dev/null 2>&1 || true
+    if perl -e 'alarm shift; exec @ARGV' "$LIMITE_PARA_LIGAR" xcrun simctl bootstatus "$1" -b > /dev/null 2>&1; then
+      return 0
+    fi
+    echo "Simulador: não terminou de ligar em $(( LIMITE_PARA_LIGAR / 60 )) minutos (tentativa $tentativa de 2)" | tee -a resultado/resumo.txt
+    xcrun simctl shutdown "$1" > /dev/null 2>&1 || true
+  done
+  return 1
+}
+
+# Deixa o simulador, já ligado, pronto para as fotos, com o app instalado.
 preparar() { # $1 = udid
-  xcrun simctl bootstatus "$1" -b > /dev/null
   xcrun simctl ui "$1" appearance dark || true
   xcrun simctl status_bar "$1" override --time "14:30" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4 || true
   # Num simulador novo, o teclado abre com uma explicação por cima das teclas ("deslize o dedo
@@ -178,9 +193,13 @@ for UDID in $IPHONE $IPAD; do
   idioma "$UDID" || echo "Idioma do simulador: não deu para pôr em português (as fotos saem assim mesmo)" | tee -a resultado/resumo.txt
 done
 
-# Ligar o simulador é a parte demorada: os dois começam a ligar juntos.
-if [ -n "$IPHONE" ]; then xcrun simctl boot "$IPHONE" || true; fi
-if [ -n "$IPAD" ]; then xcrun simctl boot "$IPAD" || true; fi
+# Ligar o simulador é a parte demorada. Um de cada vez: os dois ligando juntos disputam a máquina
+# (um deles chega a falhar e tem de ser ligado de novo), e o que está sendo fotografado fica lento.
+if [ -n "$IPHONE" ] && ! ligar "$IPHONE"; then
+  echo "Fotos do iPhone: ficaram de fora (o simulador não ligou)" | tee -a resultado/resumo.txt
+  FALHAS=$((FALHAS + 1))
+  IPHONE=""
+fi
 
 if [ -n "$IPHONE" ]; then
   preparar "$IPHONE"
@@ -210,6 +229,12 @@ if [ -n "$IPHONE" ]; then
   foto "$IPHONE" "iphone-deitado-5-reprodutor" "reprodutor" deitado
   foto "$IPHONE" "iphone-deitado-6-video-falhou" "video-falhou" deitado
   xcrun simctl shutdown "$IPHONE" || true
+fi
+
+if [ -n "$IPAD" ] && ! ligar "$IPAD"; then
+  echo "Fotos do iPad: ficaram de fora (o simulador não ligou)" | tee -a resultado/resumo.txt
+  FALHAS=$((FALHAS + 1))
+  IPAD=""
 fi
 
 if [ -n "$IPAD" ]; then
