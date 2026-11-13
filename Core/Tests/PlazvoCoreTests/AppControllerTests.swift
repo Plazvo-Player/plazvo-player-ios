@@ -470,6 +470,27 @@ struct AppControllerTests {
         #expect(!bench.changes.contains { !$0.activating && $0.codeResult != nil && $0.dialog == .code })
     }
 
+    @Test("código comum e, com o app ainda aberto, o aparelho entra numa parceria: a Conta deixa de falar em dias")
+    func codeThenSponsorship() async {
+        await bench.site.addCode("ABCD-EFGH-JKMN", days: 30)
+        await bench.app.start()
+        bench.app.openAccount()
+        bench.app.openCodeDialog()
+        await bench.app.activateWithCode("ABCDEFGHJKMN")
+        #expect(bench.state.codeResult == .activated(days: 30))
+        #expect(ScreenTexts.activated(days: 30, sponsored: bench.state.site.sponsored) == TextRef("code_activated_days.other", ["30"]))
+
+        // O aparelho passa a ser de uma parceria, e o usuário toca em Recarregar.
+        await bench.site.setSetup { $0.sponsored = true }
+        await bench.app.reload()
+
+        #expect(bench.state.site.sponsored)
+        #expect(ScreenTexts.activeUntil(bench.state.site, datePattern: "dd/MM/yyyy") == TextRef("playlists_active_partner"))
+        // O resultado do código continua guardado, mas a linha dele na Conta já não diz os dias.
+        #expect(bench.state.codeResult == .activated(days: 30))
+        #expect(ScreenTexts.activated(days: 30, sponsored: bench.state.site.sponsored) == TextRef("code_activated"))
+    }
+
     @Test("código recusado: a caixa continua aberta com o motivo; fechar a caixa descarta o aviso")
     func codeRefused() async {
         await bench.app.start()

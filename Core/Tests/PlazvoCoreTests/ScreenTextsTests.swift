@@ -99,6 +99,12 @@ struct ScreenTextsTests {
         #expect(ScreenTexts.activated(days: nil) == TextRef("code_activated"))
         #expect(ScreenTexts.activated(days: 1) == TextRef("code_activated_days.one", ["1"]))
         #expect(ScreenTexts.activated(days: 365) == TextRef("code_activated_days.other", ["365"]))
+        // Zero ou menos nunca vira "ativado por 0 dias".
+        #expect(ScreenTexts.activated(days: 0) == TextRef("code_activated"))
+        #expect(ScreenTexts.activated(days: -3) == TextRef("code_activated"))
+        // Aparelho ativo por uma parceria: a Conta não fala em dias, nem os de um código de antes.
+        #expect(ScreenTexts.activated(days: 30, sponsored: true) == TextRef("code_activated"))
+        #expect(ScreenTexts.activated(days: 30, sponsored: false) == TextRef("code_activated_days.other", ["30"]))
 
         #expect(ScreenTexts.codeProblem(.activated(days: 30)) == nil)
         let expected: [(CodeProblem, String)] = [
@@ -208,7 +214,7 @@ struct ScreenTextsTests {
         var refs: [TextRef] = [
             TextRef("playlists_inactive"), TextRef("playlists_blocked"), TextRef("playlists_empty"), TextRef("playlists_loading"),
             TextRef("playlists_active_until"), TextRef("new_key_failed"), TextRef("device_id_copied"), TextRef("device_key_copied"),
-            ScreenTexts.activeUntil(SiteListsState(status: .active, sponsored: true), datePattern: "dd/MM/yyyy")!,
+            try #require(ScreenTexts.activeUntil(SiteListsState(status: .active, sponsored: true), datePattern: "dd/MM/yyyy")),
             ScreenTexts.activated(days: nil), ScreenTexts.activated(days: 1), ScreenTexts.activated(days: 2),
             ScreenTexts.unlinkResult(.unlinked), ScreenTexts.unlinkResult(.notLinked),
         ]

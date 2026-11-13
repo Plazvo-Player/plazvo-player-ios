@@ -56,16 +56,17 @@ struct AccountScreen: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
-    /// "Ativo até 02/10/2027", ou a frase sobre a situação do aparelho.
+    /// "Ativo até 02/10/2027" (ou "Ativo por parceiro"), ou a frase sobre a situação do aparelho.
     private func statusText(_ site: SiteListsState) -> String {
         if let until = ScreenTexts.activeUntil(site, datePattern: t("playlists_date_pattern")) { return t(until) }
         if let status = ScreenTexts.status(site) { return t(status) }
         return t("playlists_loading")
     }
 
-    /// "Aparelho ativado por 30 dias.", depois de um código aceito.
+    /// "Aparelho ativado por 30 dias.", depois de um código aceito (sem os dias se o aparelho está
+    /// ativo por uma parceria).
     private var activatedText: String? {
         guard case .activated(let days)? = model.state.codeResult else { return nil }
-        return t(ScreenTexts.activated(days: days))
+        return t(ScreenTexts.activated(days: days, sponsored: model.state.site.sponsored))
     }
 }

@@ -152,7 +152,8 @@ private struct ClockDate: View {
     }
 }
 
-/// Rodapé: o aviso de vencimento (quando falta pouco ou já venceu), "Ativo até dd/mm/aaaa" e a versão.
+/// Rodapé: o aviso de vencimento (quando falta pouco ou já venceu), "Ativo até dd/mm/aaaa" (ou "Ativo por
+/// parceiro", sem aviso) e a versão.
 private struct HomeFooter: View {
     let site: SiteListsState
     let now: Date

@@ -173,7 +173,8 @@ struct DemoSceneTests {
         #expect(bench.state.site.status == .active)
         #expect(bench.state.site.sponsored)
         #expect(ScreenTexts.activeUntil(bench.state.site, datePattern: "dd/MM/yyyy", timeZone: utc) == TextRef("playlists_active_partner"))
-        #expect(ScreenTexts.activated(days: nil) == TextRef("code_activated"))
+        // A linha do código na Conta: "Aparelho ativado.", sem os dias.
+        #expect(ScreenTexts.activated(days: 20, sponsored: bench.state.site.sponsored) == TextRef("code_activated"))
     }
 
     @Test("cenas sem conexão e bloqueado")

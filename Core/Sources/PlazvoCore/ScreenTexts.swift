@@ -53,9 +53,11 @@ public enum ScreenTexts {
         }
     }
 
-    /// "Aparelho ativado por 30 dias." (ou só "Aparelho ativado." se o servidor não disse por quanto tempo).
-    public static func activated(days: Int?) -> TextRef {
-        guard let days else { return TextRef("code_activated") }
+    /// "Aparelho ativado por 30 dias.", ou só "Aparelho ativado." se o servidor não disse por quanto
+    /// tempo ou se a ativação de agora é de uma parceria (`sponsored`: ela se renova sozinha, e a tela
+    /// não fala em dias).
+    public static func activated(days: Int?, sponsored: Bool = false) -> TextRef {
+        guard let days, days > 0, !sponsored else { return TextRef("code_activated") }
         return TextRef(days == 1 ? "code_activated_days.one" : "code_activated_days.other", [String(days)])
     }
 

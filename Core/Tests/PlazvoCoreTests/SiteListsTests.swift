@@ -511,6 +511,74 @@ struct SiteListsTests {
         #expect(Validity.warning(bench.state, now: bench.clock.now) == .expired)
     }
 
+    @Test("parceria: resposta ativa com a data de fim já passada conta como não ativa")
+    func sponsoredButExpired() async {
+        await bench.activateAll([serverList], expiresAt: "2026-10-05T18:59:59Z", sponsored: true)
+
+        await bench.lists.sync()
+
+        #expect(bench.state.status == .inactive)
+        #expect(!bench.state.sponsored)
+        #expect(bench.state.playlists.isEmpty)
+        #expect(bench.copy.data == nil)
+        #expect(Validity.warning(bench.state, now: bench.clock.now) == .expired)
+        #expect(!bench.changes.contains { $0.status == .active || $0.sponsored })
+    }
+
+    @Test("parceria: a cópia guardada não vale depois do fim da ativação")
+    func sponsoredCopyExpires() async {
+        await bench.activateAll([serverList], expiresAt: "2026-11-30T02:59:59Z", sponsored: true)
+        await bench.lists.sync()
+        await bench.site.setDown(true)
+        bench.clock.set("2026-11-30T03:00:00Z")
+        bench.reopen()
+
+        await bench.lists.sync()
+
+        #expect(bench.state.status == .unknown)
+        #expect(!bench.state.sponsored)
+        #expect(bench.state.playlists.isEmpty)
+        #expect(bench.copy.data == nil)
+        #expect(!bench.changes.contains { $0.status == .active || $0.sponsored })
+    }
+
+    @Test("parceria vencida descoberta numa consulta que falhou: as listas saem e o aviso fica")
+    func sponsoredExpiredDuringFailedSync() async {
+        await bench.activateAll([serverList], expiresAt: "2026-10-06T02:59:59Z", sponsored: true)
+        await bench.lists.sync()
+        await bench.site.setRefuseWith(429)
+
+        // Antes da data, a consulta que falha não mexe na parceria (nem traz o aviso de vencimento).
+        await bench.lists.sync()
+        #expect(bench.state.status == .active)
+        #expect(bench.state.sponsored)
+        #expect(bench.state.problem == .tooManyAttempts)
+        #expect(Validity.warning(bench.state, now: bench.clock.now) == nil)
+
+        bench.clock.set("2026-10-06T03:00:00Z")
+        await bench.lists.sync()
+        #expect(bench.state.status == .inactive)
+        #expect(!bench.state.sponsored)
+        #expect(bench.state.playlists.isEmpty)
+        #expect(bench.state.problem == .tooManyAttempts)
+        #expect(bench.copy.data == nil)
+        #expect(Validity.warning(bench.state, now: bench.clock.now) == .expired)
+    }
+
+    @Test("parceria que vence com o app aberto: a lista já não abre, mesmo sem a tela conferir antes")
+    func sponsoredListDoesNotOpen() async {
+        await bench.activateAll([serverList], expiresAt: "2026-11-30T02:59:59Z", sponsored: true)
+        await bench.lists.sync()
+        #expect(bench.lists.playlist(id: 7) != nil)
+
+        bench.clock.set("2026-11-30T02:59:59Z")
+
+        #expect(bench.lists.playlist(id: 7) == nil)
+        #expect(bench.state.status == .inactive)
+        #expect(!bench.state.sponsored)
+        #expect(await eventually { bench.copy.data == nil })
+    }
+
     @Test("parceria: painel antigo não manda o campo, e tudo fica como antes")
     func sponsoredOldPanel() async {
         await bench.activateAll(sponsored: true)
@@ -583,7 +651,7 @@ struct SiteListsTests {
         #expect(bench.state.sponsored)
     }
 
-    @Test("código comum depois da parceria: o resultado volta a dizer os dias")
+    @Test("código comum, com o campo da parceria em falso: o resultado continua dizendo os dias")
     func plainCodeKeepsDays() async {
         await bench.site.addCode("ABCDEFGHJKMN", days: 30, sponsored: false)
 
