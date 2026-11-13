@@ -21,7 +21,8 @@ final class StubServer: @unchecked Sendable {
 
     enum Answer: Sendable {
         case response(status: Int, body: String, headers: [String: String] = [:])
-        /// Só o começo da resposta: o corpo nunca termina de chegar (como uma transmissão sem fim).
+        /// Só o começo da resposta, como numa transmissão sem fim: o tipo do conteúdo, o primeiro
+        /// pedaço do corpo e mais nada (o corpo nunca termina de chegar).
         case endlessBody(status: Int)
         case noConnection
     }
@@ -102,12 +103,15 @@ final class StubProtocol: URLProtocol {
         case .noConnection:
             client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
         case .endlessBody(let status):
-            guard let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: [:]) else {
+            let headers = ["Content-Type": "video/mp2t"]
+            guard let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers) else {
                 client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
                 return
             }
             client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-            client?.urlProtocol(self, didLoad: Data("começo do vídeo".utf8))
+            // O primeiro pedaço de um vídeo de verdade passa de 512 bytes (até aí, o sistema da
+            // Apple pode segurar a resposta para adivinhar o tipo do conteúdo).
+            client?.urlProtocol(self, didLoad: Data(repeating: 0x47, count: 4 * 1024))
         case .response(let status, let body, let headers):
             guard let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers) else {
                 client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
