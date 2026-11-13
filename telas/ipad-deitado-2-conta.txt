@@ -1,0 +1,12 @@
+cena=conta
+posicao=deitado-direita
+janela=1210x834
+arranjo=wide
+tela=conta
+caixa=nenhuma
+teclado=nao
+recentes=0
+link-errado=nao
+video=nenhum
+espera=1.8s
+giro-recusado=O modo de janelas atual não permite alterações de programação na orientação da interface.

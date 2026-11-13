@@ -1,0 +1,11 @@
+cena=midia-recentes
+posicao=em-pe
+janela=834x1210
+arranjo=medium
+tela=midia
+caixa=nenhuma
+teclado=nao
+recentes=3
+link-errado=nao
+video=nenhum
+espera=1.7s

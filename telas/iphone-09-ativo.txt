@@ -1,0 +1,11 @@
+cena=ativo
+posicao=em-pe
+janela=402x874
+arranjo=compact
+tela=inicial
+caixa=nenhuma
+teclado=nao
+recentes=0
+link-errado=nao
+video=nenhum
+espera=1.7s

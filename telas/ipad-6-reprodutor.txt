@@ -1,0 +1,16 @@
+cena=reprodutor
+posicao=em-pe
+janela=834x1210
+arranjo=medium
+tela=midia
+caixa=nenhuma
+teclado=nao
+recentes=0
+link-errado=nao
+video=paused
+ponto=9000
+duracao=21625
+video-em-pe=nao
+controles=sim
+falha=nenhuma
+espera=3.8s

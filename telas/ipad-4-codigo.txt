@@ -1,0 +1,11 @@
+cena=codigo
+posicao=em-pe
+janela=834x1210
+arranjo=medium
+tela=conta
+caixa=codigo
+teclado=sim
+recentes=0
+link-errado=nao
+video=nenhum
+espera=4.1s

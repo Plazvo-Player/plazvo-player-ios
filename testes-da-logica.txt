@@ -1,0 +1,31 @@
+✔ Test run with 270 tests in 19 suites passed after 3.401 seconds.
+✔ Test "desconectar do painel: o aparelho sai do painel e a caixa mostra o resultado até ser fechada" passed after 0.175 seconds.
+✔ Test "código comum e, com o app ainda aberto, o aparelho entra numa parceria: a Conta deixa de falar em dias" passed after 0.175 seconds.
+✔ Test "código de ativação: servidor fora do ar, segredo recusado e tentativas demais" passed after 0.178 seconds.
+✔ Test "consulta em andamento: a tela sabe, e os pedidos repetidos viram uma consulta só" passed after 0.178 seconds.
+✔ Test "parceria: aparelho desativado ou bloqueado deixa de ser de parceria" passed after 0.178 seconds.
+✔ Test "cenas do aparelho ativo: sem listas, com parceiro (Desconectar), vencendo e vencido" passed after 0.177 seconds.
+✔ Test "cenas do aparelho ainda não ativo: tela inicial, Conta e as caixas" passed after 0.177 seconds.
+✔ Test ""fim" longe do fim: a mensagem é a que a conferência achar (sem conexão, recusa do servidor)" passed after 0.180 seconds.
+✔ Test "ativação vence com o app aberto e sem internet: as listas saem" passed after 0.179 seconds.
+✔ Test "parceria que vence com o app aberto: a lista já não abre, mesmo sem a tela conferir antes" passed after 0.179 seconds.
+✔ Test "o link que tocou não volta para o campo; o que não abriu volta, para corrigir" passed after 0.174 seconds.
+✔ Test "vídeo que não abre: a falha aparece no reprodutor, e Voltar sai dele" passed after 0.174 seconds.
+✔ Test "caixa fechada no meio do pedido: o aviso da falha não volta quando a caixa abre de novo" passed after 0.178 seconds.
+✔ Test "desconectar do painel: painel antigo, servidor fora do ar, segredo recusado, tentativas demais e bloqueio" passed after 0.181 seconds.
+✔ Test "código de ativação recusado: cada motivo do servidor vira o aviso certo" passed after 0.181 seconds.
+✔ Test "um código por vez: o segundo toque em Ativar não vira um segundo pedido" passed after 0.178 seconds.
+✔ Test "consulta ao abrir o app: acontece uma vez só" passed after 0.219 seconds.
+✔ Suite "Situação do aparelho no servidor" passed after 0.223 seconds.
+✔ Test "cena do vídeo que não abriu: o link que ninguém atende dá a mensagem de falta de conexão" passed after 0.229 seconds.
+✔ Test "erro depois do fim de verdade: o vídeo já acabou, nada muda" passed after 0.243 seconds.
+✔ Test "o aviso de copiado some sozinho, e o botão volta a mostrar os dois quadradinhos" passed after 0.238 seconds.
+✔ Test "erro seguido de "fim": vale o erro, e tentar de novo continua do ponto em que estava" passed after 0.252 seconds.
+✔ Test "cena do reprodutor: o vídeo de demonstração parado aos 9 segundos, com os controles na tela" passed after 0.327 seconds.
+✔ Test "só as cenas do reprodutor terminam com um vídeo aberto" passed after 0.458 seconds.
+✔ Suite "Cenas do simulador (fotos das telas)" passed after 0.464 seconds.
+✔ Test "sair do vídeo durante a conferência: a resposta dela é ignorada" passed after 0.503 seconds.
+✔ Suite "Reprodutor: vídeo que não abre" passed after 0.508 seconds.
+✔ Test "copiar de novo antes de o aviso sumir: vale o tempo do último toque" passed after 3.392 seconds.
+✔ Suite "Telas: o que está por trás delas" passed after 3.399 seconds.
+✔ Test run with 270 tests in 19 suites passed after 3.401 seconds.

@@ -1,0 +1,56 @@
+Compilação: 13/11/2026 11:31:57 (UTC)
+Envio (commit): cd131e097ea6505e82a796a4b9d48fe1a17b459f
+Máquina: macos-latest — macOS 26.7.2 (arm64)
+Xcode: Xcode 26.6 Build version 17F113 
+Swift: swift-driver version: 1.148.6 Apple Swift version 6.3.3 (swiftlang-6.3.3.1.3 clang-2100.1.1.101)
+SDK do iOS: 26.5
+iOS mínimo que este Xcode aceita: 12.0
+iOS mínimo recomendado por este Xcode: 15.0
+
+Xcodes instalados:
+  Xcode_26.0.1.app
+  Xcode_26.0.app
+  Xcode_26.1.1.app
+  Xcode_26.1.app
+  Xcode_26.2.0.app
+  Xcode_26.2.app
+  Xcode_26.3.0.app
+  Xcode_26.3.app
+  Xcode_26.4.1.app
+  Xcode_26.4.app
+  Xcode_26.5.0.app
+  Xcode_26.5.app
+  Xcode_26.6.0.app
+  Xcode_26.6.app
+  Xcode.app
+
+Sistemas de simulador:
+  == Runtimes ==
+  iOS 26.2 (26.2 - 23C54) - com.apple.CoreSimulator.SimRuntime.iOS-26-2
+  iOS 26.4 (26.4.1 - 23E254a) - com.apple.CoreSimulator.SimRuntime.iOS-26-4
+  iOS 26.5 (26.5 - 23F77) - com.apple.CoreSimulator.SimRuntime.iOS-26-5
+  tvOS 26.2 (26.2 - 23K51) - com.apple.CoreSimulator.SimRuntime.tvOS-26-2
+  tvOS 26.4 (26.4 - 23L243a) - com.apple.CoreSimulator.SimRuntime.tvOS-26-4
+  tvOS 26.5 (26.5 - 23L470) - com.apple.CoreSimulator.SimRuntime.tvOS-26-5
+  watchOS 26.2 (26.2 - 23S303) - com.apple.CoreSimulator.SimRuntime.watchOS-26-2
+  watchOS 26.4 (26.4 - 23T240b) - com.apple.CoreSimulator.SimRuntime.watchOS-26-4
+  watchOS 26.5 (26.5 - 23T570) - com.apple.CoreSimulator.SimRuntime.watchOS-26-5
+  visionOS 26.2 (26.2 - 23N301) - com.apple.CoreSimulator.SimRuntime.xrOS-26-2
+  visionOS 26.4 (26.4.1 - 23O249a) - com.apple.CoreSimulator.SimRuntime.xrOS-26-4
+  visionOS 26.5 (26.5 - 23O470) - com.apple.CoreSimulator.SimRuntime.xrOS-26-5
+
+Testes da lógica: Test run with 270 tests in 19 suites passed after 3.401 seconds.
+Motor de vídeo: MobileVLCKit 3.7.5 baixado de download.videolan.org e conferido (SHA-256 a76f7a6cfcde…)
+XcodeGen: Version: 2.46.0
+Conferência dos registros do motor de vídeo: o app não liga nenhum registro do motor
+Compilação: deu certo
+Conferência do servidor: o app do simulador não tem o endereço api.plazvo.com
+Compilação para o aparelho (sem assinatura): deu certo
+Conferência do servidor: o app do aparelho tem o endereço api.plazvo.com
+Conferência das cenas: o app do aparelho não tem as cenas das fotos
+Pacote do aparelho: MobileVLCKit.framework — de "armv7 armv7s arm64" ficou "arm64"
+Pacote do aparelho (sem assinatura): plazvo-player-iphone-v0.2.1-sem-assinatura.ipa, 20020828 bytes, SHA-256 3ff5ee5373faf86d30c26c1583381ae439c365ffa44d0ab344f049027484610b
+Pacote do aparelho guardado no rascunho pacote-de-teste-macos-latest
+Simulador: iPhone 17 (iOS 26.5)
+Simulador: iPad Pro 11-inch (M5) (iOS 26.5)
+Fotos: 36 — ipad-1-inicial.png ipad-2-conta.png ipad-3-ativo.png ipad-4-codigo.png ipad-5-midia-recentes.png ipad-6-reprodutor.png ipad-7-parceiro.png ipad-deitado-1-ativo.png ipad-deitado-2-conta.png ipad-deitado-3-midia-recentes.png ipad-deitado-4-reprodutor.png iphone-01-inicial.png iphone-02-conta.png iphone-03-codigo.png iphone-04-codigo-errado.png iphone-05-ativado.png iphone-06-nova-chave.png iphone-07-desconectar.png iphone-08-copiado.png iphone-09-ativo.png iphone-10-sem-conexao.png iphone-11-bloqueado.png iphone-12-vencendo.png iphone-13-vencido.png iphone-14-midia.png iphone-15-midia-recentes.png iphone-16-link.png iphone-17-link-errado.png iphone-18-parceiro.png iphone-19-parceiro-ativado.png iphone-deitado-1-inicial.png iphone-deitado-2-conta.png iphone-deitado-3-codigo.png iphone-deitado-4-midia-recentes.png iphone-deitado-5-reprodutor.png iphone-deitado-6-video-falhou.png 

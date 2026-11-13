@@ -1,0 +1,11 @@
+cena=midia-recentes
+posicao=deitado-direita
+janela=874x402
+arranjo=wide
+tela=midia
+caixa=nenhuma
+teclado=nao
+recentes=3
+link-errado=nao
+video=nenhum
+espera=1.8s

@@ -1,0 +1,11 @@
+cena=inicial
+posicao=deitado-direita
+janela=874x402
+arranjo=wide
+tela=inicial
+caixa=nenhuma
+teclado=nao
+recentes=0
+link-errado=nao
+video=nenhum
+espera=1.9s
