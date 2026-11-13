@@ -43,6 +43,14 @@ player_error_code player_retry
 # Textos que só este app tem (o app Android ainda não tem a função). Quando o Android ganhar o
 # mesmo texto, a chave sai daqui e entra em CHAVES.
 EXTRAS = {
+    # No lugar de "Ativo até" e a data, quando a ativação é de uma parceria (campo `sponsored` da
+    # API). O texto tem de ser o mesmo em todos os apps.
+    "playlists_active_partner": {
+        "en": "Active via partner",
+        "pt-BR": "Ativo por parceiro",
+        "pt-PT": "Ativo por parceiro",
+        "es": "Activo por socio",
+    },
     # Botão de copiar ao lado do ID e da chave (pedido do dono em 12/11/2026).
     "device_copy_id": {"en": "Copy ID", "pt-BR": "Copiar o ID", "pt-PT": "Copiar o ID", "es": "Copiar el ID"},
     "device_copy_key": {"en": "Copy key", "pt-BR": "Copiar a chave", "pt-PT": "Copiar a chave", "es": "Copiar la clave"},

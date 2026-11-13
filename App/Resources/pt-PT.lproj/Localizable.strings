@@ -91,6 +91,7 @@
 "player_error_generic" = "Não foi possível reproduzir este vídeo.";
 "player_error_code" = "Código %1$@";
 "player_retry" = "Tentar novamente";
+"playlists_active_partner" = "Ativo por parceiro";
 "device_copy_id" = "Copiar o ID";
 "device_copy_key" = "Copiar a chave";
 "device_id_copied" = "ID copiado";

@@ -32,6 +32,10 @@ public enum DemoScene: String, CaseIterable, Sendable {
     case expiring = "vencendo"
     /// Tela inicial, ativação vencida.
     case expired = "vencido"
+    /// Tela inicial, aparelho ativado por uma parceria ("Ativo por parceiro", sem a data).
+    case partner = "parceiro"
+    /// Conta depois de ativar com o código de uma parceria.
+    case partnerActivated = "parceiro-ativado"
     /// Mídia, sem vídeos recentes.
     case media = "midia"
     /// Mídia com três vídeos recentes.
@@ -50,6 +54,9 @@ public enum DemoScene: String, CaseIterable, Sendable {
 
     /// Um código que o servidor de mentira não conhece.
     public static let unknownCode = "ZZZZZZZZZZZZ"
+
+    /// O código de exemplo de uma parceria, que o servidor de mentira aceita.
+    public static let partnerCode = "PARCERIA2026"
 
     /// Um link que não responde: a porta 9 do próprio aparelho, onde nada atende. O pedido nem
     /// sai do aparelho.
@@ -120,6 +127,11 @@ public enum DemoScene: String, CaseIterable, Sendable {
         case .home, .account, .code, .wrongCode, .activated, .newKey, .copied,
              .media, .mediaRecents, .link, .wrongLink, .player, .playerProblem:
             break
+        case .partner:
+            // Faltam 20 dias: sem a parceria, a tela avisaria que vence em menos de 1 mês.
+            await site.setSetup(DemoScene.active(until: now.addingTimeInterval(20 * day), partner: true, sponsored: true))
+        case .partnerActivated:
+            await site.addCode(DemoScene.partnerCode, days: 20, sponsored: true)
         case .active:
             await site.setSetup(DemoScene.active(until: now.addingTimeInterval(365 * day), partner: false))
         case .unlink:
@@ -135,12 +147,13 @@ public enum DemoScene: String, CaseIterable, Sendable {
         }
     }
 
-    private static func active(until: Date, partner: Bool) -> @Sendable (inout FakeSite.Device) -> Void {
+    private static func active(until: Date, partner: Bool, sponsored: Bool = false) -> @Sendable (inout FakeSite.Device) -> Void {
         let expiresAt = formatServerTime(until)
         return { device in
             device.active = true
             device.expiresAt = expiresAt
             device.partner = partner
+            device.sponsored = sponsored
         }
     }
 
@@ -149,6 +162,7 @@ public enum DemoScene: String, CaseIterable, Sendable {
         switch self {
         case .code, .activated: return DemoScene.exampleCode
         case .wrongCode: return DemoScene.unknownCode
+        case .partnerActivated: return DemoScene.partnerCode
         default: return ""
         }
     }
@@ -183,7 +197,7 @@ public enum DemoScene: String, CaseIterable, Sendable {
     @MainActor
     public func play(on app: AppController, demoTitle: String = "Big Buck Bunny", patience: Double = 60) async {
         switch self {
-        case .home, .active, .offline, .blocked, .expiring, .expired:
+        case .home, .active, .offline, .blocked, .expiring, .expired, .partner:
             break
         case .media, .mediaRecents:
             app.openMedia()
@@ -226,6 +240,10 @@ public enum DemoScene: String, CaseIterable, Sendable {
             app.openAccount()
             app.openCodeDialog()
             await app.activateWithCode(DemoScene.exampleCode)
+        case .partnerActivated:
+            app.openAccount()
+            app.openCodeDialog()
+            await app.activateWithCode(DemoScene.partnerCode)
         case .newKey:
             app.openNewKeyDialog()
         case .unlink:

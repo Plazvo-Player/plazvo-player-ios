@@ -146,6 +146,36 @@ struct DemoSceneTests {
         #expect(Validity.warning(expired.state.site, now: expired.clock.now) == .expired)
     }
 
+    @Test("cena da parceria: ativo por parceiro, sem data e sem aviso, mesmo faltando menos de 1 mês")
+    func partnerScene() async {
+        let bench = await open(.partner)
+        #expect(bench.state.screen == .home)
+        #expect(bench.state.site.status == .active)
+        #expect(bench.state.site.sponsored)
+        #expect(ScreenTexts.activeUntil(bench.state.site, datePattern: "dd/MM/yyyy", timeZone: utc) == TextRef("playlists_active_partner"))
+        #expect(Validity.warning(bench.state.site, now: bench.clock.now) == nil)
+        // Sem a parceria, a mesma data daria o aviso de "menos de 1 mês".
+        var plain = bench.state.site
+        plain.sponsored = false
+        #expect(Validity.warning(plain, now: bench.clock.now) == .month)
+    }
+
+    @Test("cena depois de ativar com o código de uma parceria: a Conta não fala em dias nem em data")
+    func partnerActivatedScene() async {
+        #expect(DemoScene.partnerActivated.typedCode == DemoScene.partnerCode)
+        #expect(DemoScene.partnerCode.count == activationCodeLength)
+        #expect(normalizeActivationCode(DemoScene.partnerCode) == DemoScene.partnerCode)
+
+        let bench = await open(.partnerActivated)
+        #expect(bench.state.screen == .account)
+        #expect(bench.state.dialog == nil)
+        #expect(bench.state.codeResult == .activated(days: nil))
+        #expect(bench.state.site.status == .active)
+        #expect(bench.state.site.sponsored)
+        #expect(ScreenTexts.activeUntil(bench.state.site, datePattern: "dd/MM/yyyy", timeZone: utc) == TextRef("playlists_active_partner"))
+        #expect(ScreenTexts.activated(days: nil) == TextRef("code_activated"))
+    }
+
     @Test("cenas sem conexão e bloqueado")
     func troubleScenes() async {
         let offline = await open(.offline)

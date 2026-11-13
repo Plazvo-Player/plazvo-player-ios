@@ -91,6 +91,7 @@
 "player_error_generic" = "This video couldn’t be played.";
 "player_error_code" = "Code %1$@";
 "player_retry" = "Try again";
+"playlists_active_partner" = "Active via partner";
 "device_copy_id" = "Copy ID";
 "device_copy_key" = "Copy key";
 "device_id_copied" = "ID copied";

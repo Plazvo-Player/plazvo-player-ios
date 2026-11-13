@@ -2,6 +2,27 @@ import Foundation
 import Testing
 @testable import PlazvoCore
 
+/// O servidor de mentira com um defeito de propósito: o pedido das listas fica sem resposta.
+private struct NoPlaylists: SiteApi {
+    let site: FakeSite
+
+    func register(_ credentials: DeviceCredentials, platform: String, appVersion: String) async -> ApiResult<Void> {
+        await site.register(credentials, platform: platform, appVersion: appVersion)
+    }
+
+    func playlists(deviceId: String, secret: String) async -> ApiResult<PlaylistsAnswer> { .unavailable }
+
+    func activateWithCode(deviceId: String, secret: String, code: String) async -> ApiResult<CodeAnswer> {
+        await site.activateWithCode(deviceId: deviceId, secret: secret, code: code)
+    }
+
+    func unlink(deviceId: String, secret: String) async -> ApiResult<UnlinkAnswer> {
+        await site.unlink(deviceId: deviceId, secret: secret)
+    }
+
+    func ping() async -> ApiResult<Void> { await site.ping() }
+}
+
 /// Espera (no máximo 5 s) até a condição valer. Devolve se valeu.
 @MainActor
 func eventually(_ condition: @MainActor () async -> Bool) async -> Bool {
@@ -417,6 +438,159 @@ struct SiteListsTests {
 
         #expect(bench.state == SiteListsState(status: .blocked))
         #expect(bench.copy.data == nil)
+    }
+
+    // MARK: - Parceria ("Ativo por parceiro")
+
+    @Test("parceria: a situação diz que a ativação é de parceria, e a cópia guardada também")
+    func sponsored() async {
+        await bench.activateAll([serverList], expiresAt: "2026-11-30T02:59:59Z", partner: true, sponsored: true)
+
+        await bench.lists.sync()
+
+        #expect(bench.state.status == .active)
+        #expect(bench.state.sponsored)
+        #expect(bench.state.partner == true)
+        // A data continua valendo para saber se o aparelho está ativo.
+        #expect(bench.state.expiresAt == parseServerTime("2026-11-30T02:59:59Z"))
+
+        // Fechou e abriu sem internet: a cópia guardada traz a parceria.
+        await bench.site.setDown(true)
+        bench.reopen()
+        await bench.lists.sync()
+        #expect(bench.state.status == .active)
+        #expect(bench.state.sponsored)
+        #expect(bench.state.problem == .offline)
+    }
+
+    @Test("ativação comum de um aparelho cuidado por um parceiro não é ativação de parceria")
+    func managedIsNotSponsored() async {
+        await bench.activateAll(partner: true)
+
+        await bench.lists.sync()
+
+        #expect(bench.state.partner == true)
+        #expect(!bench.state.sponsored)
+    }
+
+    @Test("parceria que parou: o servidor volta a mandar falso, e a cópia guardada acompanha")
+    func sponsorshipEnded() async {
+        await bench.activateAll(expiresAt: "2026-11-30T02:59:59Z", sponsored: true)
+        await bench.lists.sync()
+        #expect(bench.state.sponsored)
+
+        await bench.activateAll(expiresAt: "2026-11-30T02:59:59Z")
+        await bench.lists.sync()
+        #expect(bench.state.status == .active)
+        #expect(!bench.state.sponsored)
+
+        await bench.site.setDown(true)
+        bench.reopen()
+        await bench.lists.sync()
+        #expect(bench.state.status == .active)
+        #expect(!bench.state.sponsored)
+    }
+
+    @Test("parceria sem falar com o servidor: vence na data, como qualquer ativação")
+    func sponsoredExpiresOffline() async {
+        await bench.activateAll([serverList], expiresAt: "2026-11-30T02:59:59Z", sponsored: true)
+        await bench.lists.sync()
+        await bench.site.setDown(true)
+
+        bench.clock.set("2026-11-30T02:59:58Z")
+        #expect(bench.lists.isActive())
+        #expect(bench.state.sponsored)
+
+        bench.clock.set("2026-11-30T02:59:59Z")
+        #expect(!bench.lists.isActive())
+        #expect(bench.state.status == .inactive)
+        #expect(!bench.state.sponsored)
+        #expect(bench.state.playlists.isEmpty)
+        // A data fica: a tela inicial avisa que venceu.
+        #expect(bench.state.expiresAt == parseServerTime("2026-11-30T02:59:59Z"))
+        #expect(Validity.warning(bench.state, now: bench.clock.now) == .expired)
+    }
+
+    @Test("parceria: painel antigo não manda o campo, e tudo fica como antes")
+    func sponsoredOldPanel() async {
+        await bench.activateAll(sponsored: true)
+        await bench.site.setOldPanel(true)
+
+        await bench.lists.sync()
+
+        #expect(bench.state.status == .active)
+        #expect(!bench.state.sponsored)
+    }
+
+    @Test("parceria: aparelho desativado ou bloqueado deixa de ser de parceria")
+    func sponsoredOnlyWhileActive() async {
+        await bench.activateAll(sponsored: true)
+        await bench.lists.sync()
+        #expect(bench.state.sponsored)
+
+        await bench.site.setSetup { $0.active = false }
+        await bench.lists.sync()
+        #expect(bench.state == SiteListsState(status: .inactive, partner: false))
+
+        await bench.activateAll(sponsored: true)
+        await bench.lists.sync()
+        #expect(bench.state.sponsored)
+
+        await bench.site.setSetup { $0.blocked = true }
+        await bench.lists.sync()
+        #expect(bench.state == SiteListsState(status: .blocked))
+    }
+
+    @Test("código de uma parceria: o aparelho fica ativo por parceria e o resultado não fala em dias")
+    func sponsoredCode() async {
+        await bench.site.addCode("PARC-ERIA-2026", days: 20, sponsored: true)
+
+        let result = await bench.lists.activateWithCode("PARCERIA2026")
+
+        #expect(result == .activated(days: nil))
+        #expect(bench.state.status == .active)
+        #expect(bench.state.sponsored)
+        #expect(bench.state.expiresAt == parseServerTime("2026-10-25T19:00:00Z"))
+    }
+
+    @Test("código de uma parceria aceito e a consulta seguinte sem resposta: o resultado já não fala em dias")
+    func sponsoredCodeWithoutRefresh() async {
+        await bench.site.addCode("PARCERIA2026", days: 20, sponsored: true)
+        let clock = bench.clock
+        let lists = SiteLists(
+            api: NoPlaylists(site: bench.site), identityStore: bench.identity, copy: bench.copy,
+            platform: "ios", appVersion: "0.1.0", now: { clock.now }
+        )
+
+        let result = await lists.activateWithCode("PARCERIA2026")
+
+        #expect(result == .activated(days: nil))
+        // A situação só muda com a resposta das listas.
+        #expect(lists.state.status == .unknown)
+        #expect(!lists.state.sponsored)
+        #expect(lists.state.problem == .offline)
+    }
+
+    @Test("código aceito sem o campo da parceria, mas a situação nova é de parceria: sem os dias")
+    func codeThenSponsoredState() async {
+        await bench.site.addCode("ABCDEFGHJKMN", days: 30)
+        // A parceria aparece só na situação (o pedido das listas), não na resposta do código.
+        await bench.site.setSetup { if $0.active { $0.sponsored = true } }
+
+        let result = await bench.lists.activateWithCode("ABCDEFGHJKMN")
+
+        #expect(result == .activated(days: nil))
+        #expect(bench.state.sponsored)
+    }
+
+    @Test("código comum depois da parceria: o resultado volta a dizer os dias")
+    func plainCodeKeepsDays() async {
+        await bench.site.addCode("ABCDEFGHJKMN", days: 30, sponsored: false)
+
+        let result = await bench.lists.activateWithCode("ABCDEFGHJKMN")
+
+        #expect(result == .activated(days: 30))
+        #expect(!bench.state.sponsored)
     }
 
     // MARK: - Desconectar do painel

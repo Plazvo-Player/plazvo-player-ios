@@ -22,6 +22,8 @@ public enum Validity {
         case .inactive:
             return .expired
         case .active:
+            // Ativação de parceria: o servidor a renova sozinho; a tela não avisa de vencimento.
+            if state.sponsored { return nil }
             let left = expiresAt.timeIntervalSince(now)
             if left <= day { return .day }
             if left <= 7 * day { return .week }

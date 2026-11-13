@@ -34,9 +34,11 @@ public enum ScreenTexts {
         }
     }
 
-    /// "Ativo até 02/10/2027", quando o aparelho está ativo e o servidor informou a data.
+    /// "Ativo até 02/10/2027", quando o aparelho está ativo e o servidor informou a data; numa
+    /// ativação de parceria, "Ativo por parceiro", sem a data.
     /// `datePattern` é a ordem de dia, mês e ano do idioma (texto `playlists_date_pattern`).
     public static func activeUntil(_ site: SiteListsState, datePattern: String, timeZone: TimeZone = .current) -> TextRef? {
+        if site.status == .active, site.sponsored { return TextRef("playlists_active_partner") }
         guard let date = Validity.activeUntil(site, pattern: datePattern, timeZone: timeZone) else { return nil }
         return TextRef("playlists_active_until", [date])
     }

@@ -20,6 +20,8 @@ public actor FakeSite: SiteApi {
         public var playlists: [List] = []
         /// Um parceiro cuida do aparelho pelo painel.
         public var partner = false
+        /// A ativação é de uma parceria (o campo `sponsored` da API).
+        public var sponsored = false
     }
 
     /// Uma lista como o servidor a entrega.
@@ -50,6 +52,8 @@ public actor FakeSite: SiteApi {
         public var usedBy: [String] = []
         /// Código de parceiro cuja conta está sem créditos: `409 no_credits`.
         public var noCredits = false
+        /// Código de uma parceria: o aparelho fica ativo por ela.
+        public var sponsored = false
     }
 
     public private(set) var devices: [String: Device] = [:]
@@ -78,7 +82,7 @@ public actor FakeSite: SiteApi {
     /// Resposta 4xx para dar a todas as chamadas (por exemplo, 429), ou `nil`.
     public func setRefuseWith(_ status: Int?) { refuseWith = status }
 
-    /// Painel antigo: não informa `partner` e responde 404 ao "Desconectar do painel".
+    /// Painel antigo: não informa `partner` nem `sponsored` e responde 404 ao "Desconectar do painel".
     public func setOldPanel(_ value: Bool) { oldPanel = value }
 
     /// Aplicado a todo aparelho assim que ele se registra, e de novo a cada pedido de listas.
@@ -92,8 +96,12 @@ public actor FakeSite: SiteApi {
     }
 
     /// Cadastra um código de ativação que ativa por `days` dias, até `uses` aparelhos.
-    public func addCode(_ code: String, days: Int = 30, uses: Int = 3, noCredits: Bool = false, disabled: Bool = false) {
-        codes[normalizeActivationCode(code)] = Code(days: days, usesLeft: uses, disabled: disabled, noCredits: noCredits)
+    public func addCode(
+        _ code: String, days: Int = 30, uses: Int = 3, noCredits: Bool = false, disabled: Bool = false, sponsored: Bool = false
+    ) {
+        codes[normalizeActivationCode(code)] = Code(
+            days: days, usesLeft: uses, disabled: disabled, noCredits: noCredits, sponsored: sponsored
+        )
     }
 
     /// Segura as respostas até `release()`: para ver o app durante uma consulta.
@@ -156,7 +164,10 @@ public actor FakeSite: SiteApi {
             "server_time": formatServerTime(now()),
             "playlists": device.active ? device.playlists.map(json) : [],
         ]
-        if !oldPanel { answer["partner"] = device.partner }
+        if !oldPanel {
+            answer["partner"] = device.partner
+            answer["sponsored"] = device.active && device.sponsored
+        }
         guard let text = text(answer), let parsed = try? parsePlaylistsAnswer(text) else { return .unavailable }
         return .ok(parsed)
     }
@@ -184,10 +195,12 @@ public actor FakeSite: SiteApi {
         known.usedBy.append(deviceId)
         codes[code] = known
         device.active = true
+        device.sponsored = known.sponsored
         device.expiresAt = formatServerTime(now().addingTimeInterval(Double(known.days) * 86_400))
         device.playlists = []
         devices[deviceId] = device
-        guard let parsed = try? parseCodeAnswer("{\"ok\": true, \"active\": true, \"days\": \(known.days)}") else { return .unavailable }
+        let sponsored = oldPanel ? "" : ", \"sponsored\": \(known.sponsored)"
+        guard let parsed = try? parseCodeAnswer("{\"ok\": true, \"active\": true, \"days\": \(known.days)\(sponsored)}") else { return .unavailable }
         return .ok(parsed)
     }
 

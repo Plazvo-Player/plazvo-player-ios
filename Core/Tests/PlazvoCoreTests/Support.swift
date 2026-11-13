@@ -72,12 +72,15 @@ final class Bench {
     }
 
     /// Todo aparelho passa a estar ativo, com estas listas, até `expiresAt`.
-    func activateAll(_ playlists: [FakeSite.List] = [], expiresAt: String = "2027-10-02T22:40:23Z", partner: Bool = false) async {
+    func activateAll(
+        _ playlists: [FakeSite.List] = [], expiresAt: String = "2027-10-02T22:40:23Z", partner: Bool = false, sponsored: Bool = false
+    ) async {
         await site.setSetup { device in
             device.active = true
             device.expiresAt = expiresAt
             device.playlists = playlists
             device.partner = partner
+            device.sponsored = sponsored
         }
     }
 }

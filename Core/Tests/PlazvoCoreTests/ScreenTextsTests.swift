@@ -78,6 +78,22 @@ struct ScreenTextsTests {
         #expect(ScreenTexts.activeUntil(SiteListsState(status: .inactive, expiresAt: active.expiresAt), datePattern: "dd/MM/yyyy") == nil)
     }
 
+    @Test("\"Ativo por parceiro\": no lugar da data, só com o aparelho ativo por uma parceria")
+    func activeByPartner() {
+        let expiresAt = parseServerTime("2026-12-01T02:59:59Z")
+        let sponsored = SiteListsState(status: .active, expiresAt: expiresAt, partner: true, sponsored: true)
+        #expect(ScreenTexts.activeUntil(sponsored, datePattern: "dd/MM/yyyy", timeZone: saoPaulo) == TextRef("playlists_active_partner"))
+        // Sem a data informada, o texto é o mesmo.
+        #expect(ScreenTexts.activeUntil(SiteListsState(status: .active, sponsored: true), datePattern: "dd/MM/yyyy") == TextRef("playlists_active_partner"))
+        // A parceria parou: volta a data.
+        let ended = SiteListsState(status: .active, expiresAt: expiresAt, partner: true)
+        #expect(ScreenTexts.activeUntil(ended, datePattern: "dd/MM/yyyy", timeZone: saoPaulo) == TextRef("playlists_active_until", ["30/11/2026"]))
+        // Fora do ativo, nada (nem com a marca da parceria).
+        for status in [SiteStatus.inactive, .blocked, .unknown] {
+            #expect(ScreenTexts.activeUntil(SiteListsState(status: status, expiresAt: expiresAt, sponsored: true), datePattern: "dd/MM/yyyy") == nil)
+        }
+    }
+
     @Test("código de ativação: por quantos dias ativou e o aviso de cada recusa")
     func code() {
         #expect(ScreenTexts.activated(days: nil) == TextRef("code_activated"))
@@ -192,6 +208,7 @@ struct ScreenTextsTests {
         var refs: [TextRef] = [
             TextRef("playlists_inactive"), TextRef("playlists_blocked"), TextRef("playlists_empty"), TextRef("playlists_loading"),
             TextRef("playlists_active_until"), TextRef("new_key_failed"), TextRef("device_id_copied"), TextRef("device_key_copied"),
+            ScreenTexts.activeUntil(SiteListsState(status: .active, sponsored: true), datePattern: "dd/MM/yyyy")!,
             ScreenTexts.activated(days: nil), ScreenTexts.activated(days: 1), ScreenTexts.activated(days: 2),
             ScreenTexts.unlinkResult(.unlinked), ScreenTexts.unlinkResult(.notLinked),
         ]
@@ -240,6 +257,8 @@ struct ScreenTextsTests {
         let texts = try appTexts("pt-BR")
         func sentence(_ ref: TextRef) -> String { ScreenTexts.fill(texts[ref.key] ?? "", ref.args) }
         #expect(sentence(TextRef("playlists_active_until", ["12/11/2027"])) == "Ativo até 12/11/2027")
+        #expect(sentence(TextRef("playlists_active_partner")) == "Ativo por parceiro")
+        #expect(sentence(ScreenTexts.activated(days: nil)) == "Aparelho ativado.")
         #expect(sentence(ScreenTexts.activated(days: 365)) == "Aparelho ativado por 365 dias.")
         #expect(sentence(ScreenTexts.activated(days: 1)) == "Aparelho ativado por 1 dia.")
         #expect(sentence(TextRef("playlists_rejected", ["418"])) == "O servidor não aceitou o pedido (erro 418).")

@@ -143,6 +143,33 @@ struct SiteAnswerTests {
         #expect(try parseCodeAnswer(#"{"ok": true, "days": 0}"#).days == nil)
         #expect(try parseCodeAnswer(#"{"ok": true}"#).days == nil)
         #expect(throws: (any Error).self) { try parseCodeAnswer("nada") }
+
+        // Parceria: o campo `sponsored` vem junto; os dias podem vir zerados.
+        #expect(try parseCodeAnswer(#"{"ok": true, "days": 20, "sponsored": true}"#) == CodeAnswer(days: 20, sponsored: true))
+        #expect(try parseCodeAnswer(#"{"ok": true, "days": 0, "sponsored": true}"#) == CodeAnswer(days: nil, sponsored: true))
+        #expect(try parseCodeAnswer(#"{"ok": true, "days": 30, "sponsored": false}"#) == CodeAnswer(days: 30, sponsored: false))
+        #expect(try !parseCodeAnswer(#"{"ok": true, "days": 30}"#).sponsored)
+        #expect(try !parseCodeAnswer(#"{"ok": true, "days": 30, "sponsored": "sim"}"#).sponsored)
+    }
+
+    @Test("parceria: o campo sponsored só vale verdadeiro, e só com o aparelho ativo")
+    func sponsoredField() throws {
+        #expect(try parsePlaylistsAnswer(#"{"active": true, "sponsored": true}"#).sponsored)
+        #expect(try parsePlaylistsAnswer(#"{"active": true, "sponsored": "true"}"#).sponsored)
+        #expect(try !parsePlaylistsAnswer(#"{"active": true, "sponsored": false}"#).sponsored)
+        // Painel antigo: o campo não vem.
+        #expect(try !parsePlaylistsAnswer(#"{"active": true}"#).sponsored)
+        for other in ["null", "1", "\"sim\"", "[true]", "{\"sponsored\": true}"] {
+            #expect(try !parsePlaylistsAnswer("{\"active\": true, \"sponsored\": \(other)}").sponsored, "valor \(other)")
+        }
+        // Fora do contrato: parceria sem o aparelho ativo não vale.
+        #expect(try !parsePlaylistsAnswer(#"{"active": false, "sponsored": true}"#).sponsored)
+        // Não é o `partner` (que só diz se um parceiro cuida do aparelho pelo painel).
+        let managed = try parsePlaylistsAnswer(#"{"active": true, "partner": true}"#)
+        #expect(managed.partner == true)
+        #expect(!managed.sponsored)
+        let sponsored = try parsePlaylistsAnswer(#"{"active": true, "sponsored": true}"#)
+        #expect(sponsored.partner == nil)
     }
 
     @Test("resposta do desconectar do painel")

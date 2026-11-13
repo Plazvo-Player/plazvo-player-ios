@@ -221,6 +221,8 @@ if [ -n "$IPHONE" ]; then
   foto "$IPHONE" "iphone-15-midia-recentes" "midia-recentes"
   foto "$IPHONE" "iphone-16-link" "link"
   foto "$IPHONE" "iphone-17-link-errado" "link-errado"
+  foto "$IPHONE" "iphone-18-parceiro" "parceiro"
+  foto "$IPHONE" "iphone-19-parceiro-ativado" "parceiro-ativado"
   foto "$IPHONE" "iphone-deitado-1-inicial" "inicial" deitado
   foto "$IPHONE" "iphone-deitado-2-conta" "conta" deitado
   foto "$IPHONE" "iphone-deitado-3-codigo" "codigo" deitado
@@ -246,6 +248,7 @@ if [ -n "$IPAD" ]; then
   foto "$IPAD" "ipad-4-codigo" "codigo"
   foto "$IPAD" "ipad-5-midia-recentes" "midia-recentes"
   foto "$IPAD" "ipad-6-reprodutor" "reprodutor"
+  foto "$IPAD" "ipad-7-parceiro" "parceiro"
   if deitar_ipad "$IPAD"; then
     sleep 5
     foto "$IPAD" "ipad-deitado-1-ativo" "ativo" deitado

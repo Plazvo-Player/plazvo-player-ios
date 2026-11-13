@@ -91,6 +91,7 @@
 "player_error_generic" = "No se pudo reproducir este video.";
 "player_error_code" = "Código %1$@";
 "player_retry" = "Reintentar";
+"playlists_active_partner" = "Activo por socio";
 "device_copy_id" = "Copiar el ID";
 "device_copy_key" = "Copiar la clave";
 "device_id_copied" = "ID copiado";

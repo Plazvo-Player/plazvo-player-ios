@@ -50,7 +50,8 @@ public enum CodeProblem: Equatable, Sendable {
 
 /// Resultado de um código de ativação enviado ao servidor.
 public enum CodeResult: Equatable, Sendable {
-    /// O aparelho ficou ativo; `days` é por quantos dias, quando o servidor informa.
+    /// O aparelho ficou ativo; `days` é por quantos dias, quando o servidor informa (numa ativação
+    /// de parceria, nunca: ela se renova sozinha).
     case activated(days: Int?)
     case failed(CodeProblem, status: Int?)
 }
@@ -93,6 +94,9 @@ public struct SiteListsState: Equatable, Sendable {
     public var problemStatus: Int?
     /// Um parceiro cuida deste aparelho pelo painel. `nil`: o servidor não disse ou ainda não respondeu.
     public var partner: Bool?
+    /// A ativação é de uma parceria (o servidor a renova sozinho): a tela mostra "Ativo por parceiro",
+    /// sem a data e sem aviso de vencimento. Só com `.active`; `expiresAt` continua dizendo até quando.
+    public var sponsored = false
 
     public init(
         status: SiteStatus = .unknown,
@@ -101,7 +105,8 @@ public struct SiteListsState: Equatable, Sendable {
         syncing: Bool = false,
         problem: SyncProblem? = nil,
         problemStatus: Int? = nil,
-        partner: Bool? = nil
+        partner: Bool? = nil,
+        sponsored: Bool = false
     ) {
         self.status = status
         self.playlists = playlists
@@ -110,6 +115,7 @@ public struct SiteListsState: Equatable, Sendable {
         self.problem = problem
         self.problemStatus = problemStatus
         self.partner = partner
+        self.sponsored = sponsored
     }
 }
 
@@ -288,7 +294,8 @@ public final class SiteLists {
         }
         // Ativado: a situação e as listas vêm do servidor, como ao abrir o app.
         await refreshAfterChange(credentials)
-        return .activated(days: answer.days)
+        // Numa ativação de parceria a tela não fala em dias.
+        return .activated(days: (answer.sponsored || state.sponsored) ? nil : answer.days)
     }
 
     private func codeRefused(status: Int, error: String?) -> CodeResult {
@@ -406,7 +413,8 @@ public final class SiteLists {
                     playlists: answer.playlists,
                     expiresAt: answer.expiresAt,
                     syncing: state.syncing,
-                    partner: answer.partner
+                    partner: answer.partner,
+                    sponsored: answer.sponsored
                 )
             } else {
                 // Não ativo: as listas vindas do servidor saem do aparelho.
@@ -437,7 +445,7 @@ public final class SiteLists {
     private func dropExpired() -> Bool {
         guard state.status == .active, isOver(state.expiresAt) else { return false }
         // A data fica guardada: a tela inicial mostra que a ativação venceu.
-        update { $0.status = .inactive; $0.playlists = [] }
+        update { $0.status = .inactive; $0.playlists = []; $0.sponsored = false }
         return true
     }
 
@@ -458,6 +466,7 @@ public final class SiteLists {
                 $0.playlists = answer.playlists
                 $0.expiresAt = answer.expiresAt
                 $0.partner = answer.partner
+                $0.sponsored = answer.sponsored
             }
         } else {
             copy.delete()

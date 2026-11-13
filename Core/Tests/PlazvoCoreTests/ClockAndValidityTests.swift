@@ -57,4 +57,17 @@ struct ClockAndValidityTests {
         #expect(Validity.warning(SiteListsState(status: .active), now: now) == nil)
         #expect(Validity.warning(SiteListsState(status: .blocked, expiresAt: now), now: now) == nil)
     }
+
+    @Test("parceria: nenhum aviso de vencimento enquanto ativa; vencida, avisa como qualquer outra")
+    func sponsoredWarnings() {
+        let now = parseServerTime("2026-10-05T19:00:00Z")!
+        for expires in ["2026-11-04T19:00:00Z", "2026-10-12T19:00:00Z", "2026-10-06T19:00:00Z", "2026-10-05T19:00:01Z"] {
+            let state = SiteListsState(status: .active, expiresAt: parseServerTime(expires), sponsored: true)
+            #expect(Validity.warning(state, now: now) == nil, "vence em \(expires)")
+            // O mesmo aparelho, sem a parceria, teria aviso.
+            #expect(Validity.warning(SiteListsState(status: .active, expiresAt: state.expiresAt), now: now) != nil)
+        }
+        let expired = SiteListsState(status: .inactive, expiresAt: parseServerTime("2026-10-01T00:00:00Z"), sponsored: true)
+        #expect(Validity.warning(expired, now: now) == .expired)
+    }
 }

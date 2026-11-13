@@ -64,6 +64,9 @@ public struct PlaylistsAnswer: Equatable, Sendable, CustomStringConvertible, Cus
     public let raw: String
     /// Um parceiro cuida deste aparelho pelo painel; `nil` quando o servidor não informou.
     public let partner: Bool?
+    /// A ativação é de uma parceria: o servidor a renova sozinho, todo mês (campo `sponsored`, que
+    /// só vem verdadeiro com o aparelho ativo). A tela mostra "Ativo por parceiro" no lugar da data.
+    public let sponsored: Bool
 
     // O texto recebido traz o usuário e a senha das listas: nunca pode ir parar num registro por descuido.
     public var description: String { "PlaylistsAnswer(active: \(active), playlists: \(playlists.count))" }
@@ -75,6 +78,8 @@ public struct PlaylistsAnswer: Equatable, Sendable, CustomStringConvertible, Cus
 public struct CodeAnswer: Equatable, Sendable {
     /// Por quantos dias o código ativou o aparelho, quando o servidor informa.
     public let days: Int?
+    /// A ativação é de uma parceria (campo `sponsored`): a tela não fala em dias.
+    public let sponsored: Bool
 }
 
 /// Resposta do servidor ao pedido de sair do painel (`POST /device/unlink`).
@@ -150,7 +155,7 @@ public func acceptedActivationCodeInput(_ text: String) -> String? {
 public func parseCodeAnswer(_ text: String) throws -> CodeAnswer {
     guard let fields = try JSONValue.parse(text).fields else { throw AnswerFormatError(field: "") }
     let days = fields["days"]?.whole
-    return CodeAnswer(days: (days ?? 0) > 0 ? days : nil)
+    return CodeAnswer(days: (days ?? 0) > 0 ? days : nil, sponsored: fields["sponsored"]?.flag ?? false)
 }
 
 /// Lê a resposta de `POST /device/unlink`. Lança se não for um objeto JSON.
@@ -212,7 +217,9 @@ public func parsePlaylistsAnswer(_ text: String) throws -> PlaylistsAnswer {
         serverTime: fields.text("server_time").flatMap(parseServerTime),
         playlists: playlists,
         raw: text,
-        partner: fields["partner"]?.flag
+        partner: fields["partner"]?.flag,
+        // Parceria só existe com o aparelho ativo: fora disso o campo não vale.
+        sponsored: active && fields["sponsored"]?.flag == true
     )
 }
 

@@ -240,7 +240,7 @@ struct HttpSiteApiTests {
 
         let result = await server.api.activateWithCode(deviceId: credentials.id, secret: credentials.secret, code: "ABCDEFGHJKMN")
 
-        #expect(result.value == CodeAnswer(days: 30))
+        #expect(result.value == CodeAnswer(days: 30, sponsored: false))
         let request = try #require(server.requests.first)
         #expect(request.method == "POST")
         #expect(request.url.absoluteString == "https://\(server.host)/v1/device/activate-code")
