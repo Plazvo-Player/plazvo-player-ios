@@ -7,8 +7,14 @@ final class TestClipboard {
     var texts: [String] = []
 }
 
-/// Tudo o que um teste das telas precisa, já ligado: servidor de mentira, cofre, lógica e o
-/// controle das telas, com um relógio que o teste escolhe.
+/// Guarda os motores de vídeo criados, um por vídeo aberto.
+@MainActor
+final class EngineBox {
+    var engines: [FakeEngine] = []
+}
+
+/// Tudo o que um teste das telas precisa, já ligado: servidor de mentira, cofre, lógica, vídeo de
+/// mentira e o controle das telas, com um relógio que o teste escolhe.
 @MainActor
 final class AppBench {
     let clock: TestClock
@@ -17,19 +23,61 @@ final class AppBench {
     let clipboard = TestClipboard()
     let identity: DeviceIdentityStore
     let lists: SiteLists
+    /// Onde a lista de vídeos recentes fica guardada.
+    let recentsCopy: InMemoryCopyStore
+    let recents: RecentMediaStore
+    let access = FakeAccess()
+    let diagnosis = FakeDiagnosis()
     let app: AppController
     private(set) var changes: [AppState] = []
 
-    init(now: String = "2026-10-05T19:00:00Z", random: RandomSource = predictableRandom(), noticeSeconds: Double? = nil) {
+    /// - Parameters:
+    ///   - storedRecents: o que a lista de recentes já traz guardado.
+    ///   - automaticEngine: o motor de vídeo de mentira abre e anda sozinho.
+    init(
+        now: String = "2026-10-05T19:00:00Z",
+        random: RandomSource = predictableRandom(),
+        noticeSeconds: Double? = nil,
+        storedRecents: Data? = nil,
+        automaticEngine: Bool = false
+    ) {
         let clock = TestClock(now)
         let clipboard = self.clipboard
         self.clock = clock
         site = FakeSite(now: { clock.now })
         identity = DeviceIdentityStore(store: secure, random: random)
         lists = SiteLists(api: site, identityStore: identity, copy: InMemoryCopyStore(), platform: "ios", appVersion: "0.1.0", now: { clock.now })
-        app = AppController(identityStore: identity, siteLists: lists, copyText: { clipboard.texts.append($0) }, noticeSeconds: noticeSeconds)
+        recentsCopy = InMemoryCopyStore(data: storedRecents)
+        recents = RecentMediaStore(storage: recentsCopy, now: { clock.now })
+        let box = EngineBox()
+        let playback = PlaybackParts(
+            makeEngine: {
+                let engine = FakeEngine()
+                engine.automatic = automaticEngine
+                box.engines.append(engine)
+                return engine
+            },
+            access: access,
+            diagnosis: diagnosis,
+            tickSeconds: nil
+        )
+        engineBox = box
+        app = AppController(
+            identityStore: identity,
+            siteLists: lists,
+            recentMedia: recents,
+            playback: playback,
+            copyText: { clipboard.texts.append($0) },
+            noticeSeconds: noticeSeconds
+        )
         app.onChange = { [unowned self] in self.changes.append($0) }
     }
+
+    private let engineBox: EngineBox
+
+    /// O motor do vídeo aberto por último.
+    var engine: FakeEngine? { engineBox.engines.last }
+    var engineCount: Int { engineBox.engines.count }
 
     var state: AppState { app.state }
 
@@ -108,6 +156,218 @@ struct AppControllerTests {
         #expect(bench.state.dialog == .newKey)
         bench.app.closeDialog()
         #expect(bench.state.dialog == nil)
+    }
+
+    // MARK: - Mídia e vídeo
+
+    @Test("Mídia e Abrir link: a seta volta uma tela de cada vez")
+    func mediaNavigation() async {
+        await bench.app.start()
+        #expect(bench.state.recents.isEmpty)
+        #expect(bench.state.playing == nil)
+        #expect(bench.app.player == nil)
+
+        bench.app.openMedia()
+        #expect(bench.state.screen == .media)
+        bench.app.openLinkScreen()
+        #expect(bench.state.screen == .openLink)
+
+        bench.app.back()
+        #expect(bench.state.screen == .media)
+        bench.app.back()
+        #expect(bench.state.screen == .home)
+        // Mídia e Conta voltam direto para a tela inicial.
+        bench.app.openMedia()
+        bench.app.openAccount()
+        bench.app.back()
+        #expect(bench.state.screen == .home)
+    }
+
+    @Test("vídeo de demonstração: abre o reprodutor por cima da Mídia; voltar fecha o vídeo e fica na Mídia")
+    func demoVideo() async throws {
+        await bench.app.start()
+        bench.app.openMedia()
+
+        bench.app.playDemo(title: "Big Buck Bunny (trecho)")
+
+        let request = PlaybackRequest(kind: .demo, uri: "", title: "Big Buck Bunny (trecho)")
+        #expect(bench.state.playing == request)
+        #expect(bench.state.screen == .media)
+        let player = try #require(bench.app.player)
+        #expect(player.request == request)
+        #expect(player.state.title == "Big Buck Bunny (trecho)")
+        let engine = try #require(bench.engine)
+        #expect(engine.calls == ["open \(FakeAccess.demoAddress) @0"])
+
+        bench.app.back()
+
+        #expect(bench.state.playing == nil)
+        #expect(bench.app.player == nil)
+        #expect(bench.state.screen == .media)
+        #expect(engine.calls == ["open \(FakeAccess.demoAddress) @0", "stop"])
+        #expect(bench.access.closes == 1)
+        // O vídeo de demonstração não entra nos recentes.
+        #expect(bench.state.recents.isEmpty)
+    }
+
+    @Test("abrir link: o endereço é conferido, o vídeo abre e, depois dele, voltar leva para a Mídia")
+    func openLink() async throws {
+        await bench.app.start()
+        bench.app.openMedia()
+        bench.app.openLinkScreen()
+        #expect(bench.app.lastLink.isEmpty)
+
+        let opened = bench.app.openLink("  exemplo.com/aulas/aula 3.mkv ")
+
+        #expect(opened)
+        #expect(bench.state.playing == PlaybackRequest(kind: .link, uri: "http://exemplo.com/aulas/aula%203.mkv", title: "aula 3.mkv"))
+        #expect(bench.state.screen == .media)
+        #expect(!bench.state.linkInvalid)
+        #expect(bench.app.lastLink == "http://exemplo.com/aulas/aula%203.mkv")
+        #expect(bench.engine?.calls == ["open http://exemplo.com/aulas/aula%203.mkv @0"])
+
+        bench.app.closePlayer()
+        #expect(bench.state.playing == nil)
+        #expect(bench.state.screen == .media)
+    }
+
+    @Test("abrir link com endereço que não vale: a tela avisa, nada abre, e mexer no campo tira o aviso")
+    func openInvalidLink() async {
+        await bench.app.start()
+        bench.app.openMedia()
+        bench.app.openLinkScreen()
+
+        let opened = bench.app.openLink("meu video")
+
+        #expect(!opened)
+        #expect(bench.state.linkInvalid)
+        #expect(bench.state.screen == .openLink)
+        #expect(bench.state.playing == nil)
+        #expect(bench.app.player == nil)
+        #expect(bench.engineCount == 0)
+        #expect(bench.app.lastLink.isEmpty)
+
+        bench.app.linkEdited()
+        #expect(!bench.state.linkInvalid)
+
+        // O aviso de uma tentativa anterior não volta quando a tela abre de novo.
+        bench.app.openLink("ftp://exemplo.com/a.mp4")
+        #expect(bench.state.linkInvalid)
+        bench.app.back()
+        bench.app.openLinkScreen()
+        #expect(!bench.state.linkInvalid)
+    }
+
+    @Test("o último link aberto fica guardado para corrigir, fora do estado das telas")
+    func lastLinkStaysOutOfState() async {
+        await bench.app.start()
+        bench.app.openLink("http://usuario:senha@exemplo.com:8080/a.mp4")
+        #expect(bench.app.lastLink == "http://usuario:senha@exemplo.com:8080/a.mp4")
+        var dumped = ""
+        dump(bench.state, to: &dumped)
+        #expect(!"\(bench.state)".contains("senha"))
+        #expect(!String(reflecting: bench.state).contains("senha"))
+        #expect(!dumped.contains("senha"))
+        #expect(!dumped.contains("exemplo.com"))
+    }
+
+    @Test("arquivo do aparelho: abre, entra nos recentes quando abre de verdade, e reabre de onde parou")
+    func fileAndRecents() async throws {
+        await bench.app.start()
+        bench.app.openMedia()
+        let access = Data([4, 2])
+
+        bench.app.playFile(uri: "file:///videos/F%C3%A9rias.mp4", title: "Férias.mp4", access: access)
+
+        let request = PlaybackRequest(kind: .file, uri: "file:///videos/F%C3%A9rias.mp4", title: "Férias.mp4", access: access)
+        #expect(bench.state.playing == request)
+        #expect(bench.access.asked == [request])
+        #expect(bench.state.recents.isEmpty)
+
+        let engine = try #require(bench.engine)
+        engine.startPlaying(durationMs: 600_000)
+        #expect(bench.state.recents.map(\.title) == ["Férias.mp4"])
+        engine.advance(to: 125_000)
+        bench.app.closePlayer()
+
+        let recent = try #require(bench.state.recents.first)
+        #expect(recent.positionMs == 125_000)
+        #expect(recent.durationMs == 600_000)
+        #expect(recent.access == access)
+
+        // Tocar no recente: outro motor, o mesmo pedido, do ponto guardado.
+        bench.app.openRecent(recent)
+
+        #expect(bench.engineCount == 2)
+        #expect(bench.state.playing == request)
+        #expect(bench.engine?.calls == ["open file:///videos/F%C3%A9rias.mp4 @125000"])
+    }
+
+    @Test("um vídeo novo com outro aberto: o anterior é fechado antes")
+    func newVideoClosesThePrevious() async throws {
+        await bench.app.start()
+        bench.app.playDemo(title: "Demonstração")
+        let first = try #require(bench.engine)
+        let firstPlayer = try #require(bench.app.player)
+
+        bench.app.openLink("http://exemplo.com/a.mp4")
+
+        #expect(first.calls.last == "stop")
+        #expect(bench.engineCount == 2)
+        #expect(bench.app.player !== firstPlayer)
+        #expect(bench.state.playing?.kind == .link)
+        #expect(bench.access.closes == 1)
+    }
+
+    @Test("recentes: a lista guardada aparece ao abrir o app, e Limpar esvazia")
+    func recents() async throws {
+        let stored = try JSONEncoder().encode(DemoScene.exampleRecents(now: parseServerTime("2026-11-12T17:30:00Z")!))
+        let bench = AppBench(storedRecents: stored)
+        #expect(bench.state.recents.map(\.title) == ["Aniversário da Ana.mp4", "aula-de-violao-03.mkv", "passeio-na-praia.mov"])
+
+        bench.app.clearRecents()
+
+        #expect(bench.state.recents.isEmpty)
+        #expect(bench.recentsCopy.data == nil)
+    }
+
+    @Test("voltar: primeiro a caixa aberta, depois o vídeo, depois a tela")
+    func backOrder() async {
+        await bench.app.start()
+        bench.app.openMedia()
+        bench.app.playDemo(title: "Demonstração")
+
+        bench.app.back()
+        #expect(bench.state.playing == nil)
+        #expect(bench.state.screen == .media)
+        bench.app.back()
+        #expect(bench.state.screen == .home)
+        // Sem vídeo aberto, fechar o reprodutor não faz nada.
+        bench.forgetChanges()
+        bench.app.closePlayer()
+        #expect(bench.changes.isEmpty)
+    }
+
+    @Test("vídeo que não abre: a falha aparece no reprodutor, e Voltar sai dele")
+    func failedVideo() async throws {
+        let bench = AppBench(automaticEngine: true)
+        bench.diagnosis.willAnswer(.http(status: 404))
+        await bench.app.start()
+        bench.app.openMedia()
+        bench.app.openLinkScreen()
+
+        bench.app.openLink(DemoScene.deadLink)
+
+        let player = try #require(bench.app.player)
+        #expect(await eventually { player.state.problem != nil })
+        #expect(player.state.problem == PlaybackProblem(message: TextRef("player_error_http", ["404"]), code: 2004))
+        #expect(bench.state.recents.isEmpty)
+
+        bench.app.closePlayer()
+        #expect(bench.state.playing == nil)
+        #expect(bench.state.screen == .media)
+        // O endereço fica guardado para o usuário corrigir.
+        #expect(bench.app.lastLink == DemoScene.deadLink)
     }
 
     // MARK: - Código de ativação

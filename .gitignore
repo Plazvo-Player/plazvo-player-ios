@@ -10,3 +10,5 @@ xcuserdata/
 *.ipa
 .build/
 *.log
+# O motor de vídeo (MobileVLCKit) é baixado por ci/motor-de-video.sh: não entra no repositório.
+Vendor/

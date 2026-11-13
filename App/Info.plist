@@ -7,5 +7,18 @@
 		<key>UIColorName</key>
 		<string>LaunchBackground</string>
 	</dict>
+	<!-- "Abrir link de vídeo" aceita endereços http (sem "s"), comuns em vídeo. O reprodutor toca
+	     esses endereços de qualquer jeito; esta permissão serve para o app conferir o que o
+	     servidor respondeu quando um vídeo não abre (e mostrar o número do erro). A conversa do
+	     app com o servidor do Plazvo é sempre por https. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+	<!-- O que o iPhone diz ao perguntar se o app pode falar com a rede local (link de um vídeo
+	     que está na rede da casa do usuário). O texto de cada idioma fica em InfoPlist.strings. -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>To open videos from addresses on your local network.</string>
 </dict>
 </plist>

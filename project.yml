@@ -6,8 +6,8 @@ options:
     iOS: "16.0"
 settings:
   base:
-    MARKETING_VERSION: "0.1.0"
-    CURRENT_PROJECT_VERSION: "1"
+    MARKETING_VERSION: "0.2.0"
+    CURRENT_PROJECT_VERSION: "2"
     SWIFT_VERSION: "5.0"
 # A lógica do app (sem tela) é um pacote à parte, na pasta Core.
 packages:
@@ -24,6 +24,10 @@ targets:
           - Info.plist
     dependencies:
       - package: PlazvoCore
+      # O motor de vídeo (VLC). Não fica no repositório: ci/motor-de-video.sh baixa do endereço
+      # oficial do VLC e confere o arquivo antes de usar.
+      - framework: Vendor/MobileVLCKit.xcframework
+        embed: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.plazvo.player

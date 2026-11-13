@@ -21,11 +21,21 @@ struct Backdrop: View {
 enum PlazvoIcon: String {
     case arrowBack = "icon_arrow_back"
     case check = "icon_check"
+    case clear = "icon_clear"
+    case closedCaption = "icon_closed_caption"
     case copy = "icon_content_copy"
+    case folder = "icon_folder"
+    case forward10 = "icon_forward_10"
     case key = "icon_key"
+    case link = "icon_link"
     case linkOff = "icon_link_off"
+    case pause = "icon_pause"
     case person = "icon_person"
+    case playArrow = "icon_play_arrow"
     case refresh = "icon_refresh"
+    case replay = "icon_replay"
+    case replay10 = "icon_replay_10"
+    case settings = "icon_settings"
 }
 
 struct IconView: View {

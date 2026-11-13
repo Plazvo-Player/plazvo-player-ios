@@ -12,27 +12,7 @@ struct AccountScreen: View {
         let wide = ScreenLayout.isWide(width: window.width, height: window.height)
         let site = model.state.site
         VStack(alignment: .leading, spacing: 0) {
-            // A seta de voltar e o título, fixos no alto.
-            HStack(spacing: 0) {
-                Button(action: { model.app.back() }) {
-                    IconView(icon: .arrowBack, size: 24)
-                        .foregroundColor(PlazvoColors.onSurface)
-                        .frame(width: 48, height: 48)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(PressStyle())
-                .accessibilityLabel(t("back"))
-                // A seta fica alinhada com a borda do conteúdo.
-                .padding(.leading, -12)
-                .padding(.trailing, 4)
-                Text(t("home_account"))
-                    .style(.titleLarge)
-                    .foregroundColor(PlazvoColors.onSurface)
-                    .lineLimit(1)
-                    .accessibilityAddTraits(.isHeader)
-            }
-            .padding(.top, 8)
-            .padding(.bottom, 4)
+            ScreenHeader(title: t("home_account"), onBack: { model.app.back() })
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 14) {
                     DeviceCodesPanel(

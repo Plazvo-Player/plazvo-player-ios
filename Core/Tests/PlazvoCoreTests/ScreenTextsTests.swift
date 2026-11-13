@@ -116,6 +116,45 @@ struct ScreenTextsTests {
         #expect(ScreenTexts.validityWarning(.expired) == TextRef("home_expired"))
     }
 
+    // MARK: - Mídia e vídeo
+
+    @Test("vídeo recente: de onde veio (do link, só o nome do servidor)")
+    func recentSource() {
+        let file = RecentMedia(uri: "file:///videos/1.mp4", title: "Vídeo", kind: .file)
+        let link = RecentMedia(uri: "http://usuario:senha@exemplo.com:8080/filme/u/s/1.mp4", title: "1.mp4", kind: .link)
+        #expect(ScreenTexts.recentSource(file) == TextRef("media_recent_file"))
+        #expect(ScreenTexts.recentSource(link) == TextRef("media_recent_link", ["exemplo.com"]))
+    }
+
+    @Test("vídeo recente: onde parou, só a duração quando vai começar do início, nada sem duração")
+    func recentProgress() {
+        func item(_ positionMs: Int64, _ durationMs: Int64) -> RecentMedia {
+            RecentMedia(uri: "file:///videos/1.mp4", title: "Vídeo", kind: .file, positionMs: positionMs, durationMs: durationMs)
+        }
+        let pattern = "%1$@ de %2$@"
+        #expect(ScreenTexts.recentProgress(item(754_000, 3_723_000), pattern: pattern) == "12:34 de 1:02:03")
+        #expect(ScreenTexts.recentProgress(item(1_000, 60_000), pattern: pattern) == "0:01 de 1:00")
+        #expect(ScreenTexts.recentProgress(item(999, 3_723_000), pattern: pattern) == "1:02:03")
+        #expect(ScreenTexts.recentProgress(item(0, 60_000), pattern: "%1$@ of %2$@") == "1:00")
+        #expect(ScreenTexts.recentProgress(item(30_000, 0), pattern: pattern) == nil)
+    }
+
+    @Test("reprodutor: o tempo embaixo da barra")
+    func playerTime() {
+        #expect(ScreenTexts.playerTime(positionMs: 9_000, durationMs: 21_630) == "0:09 · 0:22")
+        #expect(ScreenTexts.playerTime(positionMs: 0, durationMs: 3_723_000) == "0:00 · 1:02:03")
+        // O ponto nunca passa da duração.
+        #expect(ScreenTexts.playerTime(positionMs: 25_000, durationMs: 21_630) == "0:22 · 0:22")
+        // Sem duração conhecida (transmissão): só o ponto atual.
+        #expect(ScreenTexts.playerTime(positionMs: 95_000, durationMs: 0) == "1:35")
+    }
+
+    @Test("reprodutor: o nome de cada velocidade")
+    func rateLabel() {
+        #expect(PlayerController.rates.map { ScreenTexts.rateLabel($0) } == ["0.25x", "0.5x", "0.75x", nil, "1.25x", "1.5x", "2x"])
+        #expect(ScreenTexts.rateLabel(1.05) == "1.05x")
+    }
+
     // MARK: - Espaços dos textos
 
     @Test("os espaços do texto recebem os valores, numerados ou na ordem")
@@ -140,7 +179,7 @@ struct ScreenTextsTests {
     @Test("os quatro idiomas têm os mesmos textos, e nenhum está vazio")
     func sameKeysInEveryLanguage() throws {
         let portuguese = try appTexts("pt-BR")
-        #expect(portuguese.count >= 68)
+        #expect(portuguese.count >= 109)
         for language in languages {
             let texts = try appTexts(language)
             #expect(Set(texts.keys) == Set(portuguese.keys), "idioma \(language)")
@@ -168,6 +207,12 @@ struct ScreenTextsTests {
         }
         for warning in [ValidityWarning.month, .week, .day, .expired] {
             refs.append(ScreenTexts.validityWarning(warning))
+        }
+        for kind in [MediaKind.demo, .file, .link] {
+            refs.append(ScreenTexts.recentSource(RecentMedia(uri: "http://exemplo.com/a.mp4", title: "a.mp4", kind: kind)))
+            for failure in [PlaybackFailure.network, .http(status: 404), .notFound, .format, .unknown] {
+                refs.append(problemFor(kind: kind, failure: failure).message)
+            }
         }
         for language in languages {
             let texts = try appTexts(language)
@@ -201,6 +246,14 @@ struct ScreenTextsTests {
         #expect(sentence(TextRef("version_short", ["0.1.0"])) == "v0.1.0")
         #expect(sentence(TextRef("device_key_copied")) == "Chave copiada")
         #expect(sentence(TextRef("device_id_copied")) == "ID copiado")
+        #expect(sentence(ScreenTexts.recentSource(RecentMedia(uri: "http://u:s@exemplo.com:8080/a.mp4", title: "a.mp4", kind: .link))) == "Link · exemplo.com")
+        #expect(ScreenTexts.recentProgress(
+            RecentMedia(uri: "file:///videos/1.mp4", title: "Vídeo", kind: .file, positionMs: 754_000, durationMs: 2_890_000),
+            pattern: texts["media_recent_progress"] ?? ""
+        ) == "12:34 de 48:10")
+        #expect(sentence(problemFor(kind: .link, failure: .http(status: 403)).message) == "O servidor recusou o vídeo (erro 403).")
+        #expect(sentence(problemFor(kind: .link, failure: .network).message) == "Sem conexão com o endereço do vídeo. Confira a internet e o link.")
+        #expect(sentence(TextRef("player_error_code", ["2001"])) == "Código 2001")
         let pattern = try #require(texts["home_date"])
         let now = parseServerTime("2026-11-12T17:30:00Z")!
         #expect(ClockFormatter.clockText(now: now, languageTag: texts["language_tag"] ?? "", datePattern: pattern, timeZone: saoPaulo)

@@ -90,6 +90,49 @@ public enum ScreenTexts {
         }
     }
 
+    // MARK: - Mídia e vídeo
+
+    /// De onde veio um vídeo recente. De um link, só o nome do servidor aparece (o endereço pode
+    /// ter senha).
+    public static func recentSource(_ item: RecentMedia) -> TextRef {
+        switch item.kind {
+        case .link: return TextRef("media_recent_link", [VideoLink.host(item.uri)])
+        // (O vídeo de demonstração não entra nos recentes.)
+        case .file, .demo: return TextRef("media_recent_file")
+        }
+    }
+
+    /// "12:34 de 1:02:03" para um vídeo parado no meio; só a duração ("1:02:03") para um vídeo que
+    /// vai começar do início; `nil` quando a duração não é conhecida.
+    /// `pattern` é o texto `media_recent_progress` do idioma.
+    public static func recentProgress(_ item: RecentMedia, pattern: String) -> String? {
+        if item.durationMs <= 0 { return nil }
+        if item.positionMs < 1000 { return formatDuration(item.durationMs) }
+        return fill(pattern, [formatDuration(item.positionMs), formatDuration(item.durationMs)])
+    }
+
+    /// O tempo embaixo da barra do reprodutor: "0:09 · 0:22", ou só o ponto atual quando a
+    /// duração não é conhecida.
+    public static func playerTime(positionMs: Int64, durationMs: Int64) -> String {
+        if durationMs <= 0 { return formatDuration(positionMs) }
+        return formatDuration(min(positionMs, durationMs)) + " · " + formatDuration(durationMs)
+    }
+
+    /// O nome de uma velocidade do vídeo: "0.5x", "1.25x", "2x". A normal não tem número: é o
+    /// texto `player_speed_normal` (aqui, `nil`).
+    public static func rateLabel(_ rate: Double) -> String? {
+        if rate == 1 { return nil }
+        let hundredths = Int((rate * 100).rounded())
+        var number = String(hundredths / 100)
+        let fraction = hundredths % 100
+        if fraction != 0 {
+            number += "." + (fraction % 10 == 0 ? String(fraction / 10) : (fraction < 10 ? "0" : "") + String(fraction))
+        }
+        return number + "x"
+    }
+
+    // MARK: - Espaços dos textos
+
     /// Põe `args` nos espaços de `pattern`: `%1$@` e `%1$d` (numerados) ou `%@` e `%d` (na ordem).
     /// `%%` vira `%`. Espaço sem valor (ou marca que não é uma destas) fica como está.
     public static func fill(_ pattern: String, _ args: [String]) -> String {

@@ -25,10 +25,10 @@ enum SimulatorScenes {
             await (request.scene ?? .home).prepare(site, now: now)
             await controller.start()
             if let scene = request.scene {
-                await scene.play(on: controller)
+                await scene.play(on: controller, demoTitle: t("media_demo_title"))
             }
             await settle(request)
-            writeMarker(request, state: controller.state, seconds: Date().timeIntervalSince(started))
+            writeMarker(request, state: controller.state, player: controller.player?.state, seconds: Date().timeIntervalSince(started))
         }.value
     }
 
@@ -76,6 +76,10 @@ enum SimulatorScenes {
         if request.landscape {
             await wait(seconds: 6) { isLandscape }
         }
+        if request.scene?.showsPlayer == true, UIDevice.current.userInterfaceIdiom == .phone {
+            // O reprodutor deita a tela do iPhone sozinho (o vídeo das cenas é deitado).
+            await wait(seconds: 10) { isLandscape }
+        }
         if request.scene?.showsKeyboard == true {
             await wait(seconds: 15) { keyboardShown }
         }
@@ -101,8 +105,8 @@ enum SimulatorScenes {
     }
 
     /// Escreve `Documents/cena.txt`: a cena, a posição da tela, o tamanho da janela, o arranjo e o
-    /// que o app tinha aberto naquele momento.
-    private static func writeMarker(_ request: DemoRequest, state: AppState, seconds: Double) {
+    /// que o app tinha aberto naquele momento (a tela, a caixa e o vídeo).
+    private static func writeMarker(_ request: DemoRequest, state: AppState, player: PlayerState?, seconds: Double) {
         var lines = ["cena=\(request.scene?.rawValue ?? "")"]
         for scene in UIApplication.shared.connectedScenes {
             guard let windowScene = scene as? UIWindowScene else { continue }
@@ -120,7 +124,14 @@ enum SimulatorScenes {
                 lines.append("arranjo=\(layout)")
             }
         }
-        lines.append("tela=\(state.screen == .account ? "conta" : "inicial")")
+        let screen: String
+        switch state.screen {
+        case .home: screen = "inicial"
+        case .account: screen = "conta"
+        case .media: screen = "midia"
+        case .openLink: screen = "link"
+        }
+        lines.append("tela=\(screen)")
         let dialog: String
         switch state.dialog {
         case .some(.code): dialog = "codigo"
@@ -130,6 +141,20 @@ enum SimulatorScenes {
         }
         lines.append("caixa=\(dialog)")
         lines.append("teclado=\(keyboardShown ? "sim" : "nao")")
+        lines.append("recentes=\(state.recents.count)")
+        lines.append("link-errado=\(state.linkInvalid ? "sim" : "nao")")
+        if let player {
+            // O que o reprodutor mostrava: em que pé o vídeo estava, o ponto, a duração, o
+            // tamanho da imagem e, se não abriu, o código da falha.
+            lines.append("video=\(player.status)")
+            lines.append("ponto=\(player.positionMs)")
+            lines.append("duracao=\(player.durationMs)")
+            lines.append("video-em-pe=\(player.portraitVideo ? "sim" : "nao")")
+            lines.append("controles=\(player.controlsVisible ? "sim" : "nao")")
+            lines.append("falha=\(player.problem.map { String($0.code) } ?? "nenhuma")")
+        } else {
+            lines.append("video=nenhum")
+        }
         lines.append("espera=\(String(format: "%.1f", seconds))s")
         if let turnRefusal {
             lines.append("giro-recusado=\(turnRefusal)")

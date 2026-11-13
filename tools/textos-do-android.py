@@ -7,6 +7,7 @@ Só entram as chaves da lista CHAVES (as telas que este app já tem). Os quatro 
 Android viram: values -> en, values-pt -> pt-BR, values-pt-rPT -> pt-PT, values-es -> es.
 Texto que um idioma não traduz (marcado no Android como não traduzível) vem do inglês.
 Os textos que só este app tem ficam na tabela EXTRAS, já nos quatro idiomas.
+Os textos que o sistema mostra em nome do app (tabela SISTEMA) vão para InfoPlist.strings.
 """
 import pathlib
 import re
@@ -30,6 +31,13 @@ code_too_many code_activated code_activated_days
 new_key_title new_key_text new_key_confirm
 unlink_title unlink_text unlink_not_linked unlink_confirm unlink_sending unlink_done
 unlink_was_not_linked unlink_unavailable
+home_media
+media_pick_file media_pick_file_description media_open_link media_open_link_description
+media_demo media_demo_description media_demo_title media_demo_credit
+media_recents media_recents_clear media_recent_file media_recent_link media_recent_progress media_untitled
+link_field_label link_hint link_paste link_clear link_open link_invalid
+player_error_network player_error_http player_error_not_found player_error_format player_error_generic
+player_error_code player_retry
 """.split()
 
 # Textos que só este app tem (o app Android ainda não tem a função). Quando o Android ganhar o
@@ -46,6 +54,53 @@ EXTRAS = {
         "pt-BR": "Não foi possível guardar a chave nova. A chave continua a mesma.",
         "pt-PT": "Não foi possível guardar a chave nova. A chave continua a mesma.",
         "es": "No se pudo guardar la clave nueva. La clave sigue siendo la misma.",
+    },
+    # Os controles do reprodutor. No Android eles vêm prontos da biblioteca de vídeo (com os textos
+    # dela); aqui os controles são do app.
+    "player_play": {"en": "Play", "pt-BR": "Reproduzir", "pt-PT": "Reproduzir", "es": "Reproducir"},
+    "player_pause": {"en": "Pause", "pt-BR": "Pausar", "pt-PT": "Pausar", "es": "Pausar"},
+    "player_replay": {"en": "Play again", "pt-BR": "Ver de novo", "pt-PT": "Ver de novo", "es": "Ver de nuevo"},
+    "player_rewind": {
+        "en": "Back 10 seconds",
+        "pt-BR": "Voltar 10 segundos",
+        "pt-PT": "Recuar 10 segundos",
+        "es": "Retroceder 10 segundos",
+    },
+    "player_forward": {
+        "en": "Forward 10 seconds",
+        "pt-BR": "Avançar 10 segundos",
+        "pt-PT": "Avançar 10 segundos",
+        "es": "Avanzar 10 segundos",
+    },
+    "player_position": {"en": "Video position", "pt-BR": "Ponto do vídeo", "pt-PT": "Ponto do vídeo", "es": "Punto del video"},
+    "player_subtitles": {"en": "Subtitles", "pt-BR": "Legendas", "pt-PT": "Legendas", "es": "Subtítulos"},
+    "player_subtitles_off": {"en": "Off", "pt-BR": "Desligadas", "pt-PT": "Desligadas", "es": "Desactivados"},
+    "player_settings": {"en": "Settings", "pt-BR": "Configurações", "pt-PT": "Definições", "es": "Configuración"},
+    "player_speed": {"en": "Speed", "pt-BR": "Velocidade", "pt-PT": "Velocidade", "es": "Velocidad"},
+    "player_speed_normal": {"en": "Normal", "pt-BR": "Normal", "pt-PT": "Normal", "es": "Normal"},
+    "player_audio": {"en": "Audio", "pt-BR": "Áudio", "pt-PT": "Áudio", "es": "Audio"},
+    "player_controls": {
+        "en": "Show or hide the controls",
+        "pt-BR": "Mostrar ou esconder os controles",
+        "pt-PT": "Mostrar ou ocultar os controlos",
+        "es": "Mostrar u ocultar los controles",
+    },
+    "player_loading": {
+        "en": "Loading video",
+        "pt-BR": "Carregando o vídeo",
+        "pt-PT": "A carregar o vídeo",
+        "es": "Cargando el video",
+    },
+}
+
+# Textos que o sistema mostra em nome do app (arquivo InfoPlist.strings de cada idioma).
+SISTEMA = {
+    # A pergunta do iPhone quando o usuário abre o link de um vídeo que está na rede da casa dele.
+    "NSLocalNetworkUsageDescription": {
+        "en": "To open videos from addresses on your local network.",
+        "pt-BR": "Para abrir vídeos de endereços da sua rede local.",
+        "pt-PT": "Para abrir vídeos de endereços da sua rede local.",
+        "es": "Para abrir videos de direcciones de tu red local.",
     },
 }
 
@@ -102,7 +157,11 @@ def main() -> None:
         pasta_do_idioma = destino / f"{idioma}.lproj"
         pasta_do_idioma.mkdir(parents=True, exist_ok=True)
         (pasta_do_idioma / "Localizable.strings").write_text("\n".join(linhas) + "\n", encoding="utf-8")
-        print(f"{idioma}: {len(linhas) - 2} textos")
+        do_sistema = ["/* Gerado por tools/textos-do-android.py. Não editar à mão. */", ""]
+        for chave, traducoes in SISTEMA.items():
+            do_sistema.append(f'"{chave}" = "{para_strings(traducoes[idioma])}";')
+        (pasta_do_idioma / "InfoPlist.strings").write_text("\n".join(do_sistema) + "\n", encoding="utf-8")
+        print(f"{idioma}: {len(linhas) - 2} textos, {len(SISTEMA)} do sistema")
 
 
 if __name__ == "__main__":

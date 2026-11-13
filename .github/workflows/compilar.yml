@@ -17,7 +17,7 @@ jobs:
   simulador:
     name: Compilar e fotografar (${{ matrix.maquina }})
     runs-on: ${{ matrix.maquina }}
-    timeout-minutes: 60
+    timeout-minutes: 80
     strategy:
       fail-fast: false
       matrix:
@@ -44,12 +44,15 @@ jobs:
       - name: Testar a lógica
         run: bash ci/testar-logica.sh
 
+      - name: Buscar o motor de vídeo
+        run: bash ci/motor-de-video.sh
+
       - name: Compilar para o simulador
         run: bash ci/compilar.sh
 
       - name: Abrir no simulador e fotografar
         # Se as fotos passarem do tempo, o que já saiu ainda é guardado no passo seguinte.
-        timeout-minutes: 45
+        timeout-minutes: 55
         run: bash ci/fotografar.sh
 
       - name: Guardar o resultado

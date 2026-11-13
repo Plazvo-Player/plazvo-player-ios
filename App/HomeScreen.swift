@@ -1,9 +1,9 @@
 import PlazvoCore
 import SwiftUI
 
-/// Tela inicial da versão 0.1: a barra com a marca, a hora, a data e o botão
-/// Conta; a situação do aparelho; o ID e a chave em destaque; os três botões do aparelho; e o
-/// rodapé com a validade e a versão.
+/// Tela inicial: a barra com a marca, a hora, a data e o botão Conta; a situação do aparelho; o
+/// ID e a chave em destaque; os três botões do aparelho; o cartão Mídia; e o rodapé com a
+/// validade e a versão.
 ///
 /// - Tela estreita (celular em pé) e média (tablet em pé): a barra em duas linhas e o ID e a
 ///   chave um embaixo do outro, em letras maiores.
@@ -50,6 +50,14 @@ struct HomeScreen: View {
                         onNewKey: { model.app.openNewKeyDialog() },
                         onUnlink: { model.app.openUnlinkDialog() }
                     )
+                    GradientCard(
+                        icon: .playArrow,
+                        title: t("home_media"),
+                        from: Color(hex: 0x1B3A6B),
+                        to: Color(hex: 0x2A2A4A),
+                        action: { model.app.openMedia() }
+                    )
+                    .padding(.top, 4)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, 16)

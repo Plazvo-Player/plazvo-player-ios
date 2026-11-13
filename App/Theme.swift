@@ -43,6 +43,7 @@ struct TextStyle {
     static let headlineSmall = TextStyle(size: 24, weight: .regular, lineHeight: 32)
     static let titleLarge = TextStyle(size: 22, weight: .regular, lineHeight: 28)
     static let titleMedium = TextStyle(size: 16, weight: .medium, lineHeight: 24)
+    static let titleSmall = TextStyle(size: 14, weight: .medium, lineHeight: 20)
     static let bodyLarge = TextStyle(size: 16, weight: .regular, lineHeight: 24)
     static let bodyMedium = TextStyle(size: 14, weight: .regular, lineHeight: 20)
     static let bodySmall = TextStyle(size: 12, weight: .regular, lineHeight: 16)

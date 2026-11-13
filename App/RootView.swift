@@ -2,7 +2,8 @@ import PlazvoCore
 import SwiftUI
 import UIKit
 
-/// A janela do app: o fundo, a tela aberta (inicial ou Conta), a caixa por cima dela e o aviso curto.
+/// A janela do app: o fundo, a tela aberta (inicial, Conta, Mídia ou Abrir link), a caixa por cima
+/// dela, o aviso curto e, por cima de tudo, o reprodutor do vídeo aberto.
 struct RootView: View {
     @ObservedObject var model: AppModel
     @Environment(\.scenePhase) private var scenePhase
@@ -15,8 +16,16 @@ struct RootView: View {
                 screens(window: windowSize(proxy))
             }
             .ignoresSafeArea(.keyboard, edges: .bottom)
+            // Com o vídeo por cima, as telas não são lidas.
+            .accessibilityHidden(model.player != nil)
             dialog
             notice
+            if let player = model.player {
+                // Entrar e sair do vídeo é imediato, sem animação.
+                PlayerScreen(player: player, onExit: { model.app.closePlayer() })
+                    .transition(.identity)
+                    .zIndex(4)
+            }
         }
         .animation(.easeInOut(duration: 0.25), value: model.state.screen)
         .animation(.easeOut(duration: 0.15), value: model.state.dialog)
@@ -28,6 +37,8 @@ struct RootView: View {
         .onChange(of: scenePhase) { phase in
             // Ao voltar para o app: se a ativação venceu com ele aberto, a tela mostra.
             if phase == .active { model.app.checkExpiry() }
+            // Ao sair do app: o vídeo pausa e o ponto dele fica guardado.
+            if phase == .background { model.app.player?.enterBackground() }
         }
         .onChange(of: model.state.notice) { notice in
             // O leitor de tela também diz o aviso.
@@ -47,18 +58,36 @@ struct RootView: View {
     }
 
     private func screens(window: CGSize) -> some View {
-        let onAccount = model.state.screen == .account
+        let screen = model.state.screen
+        let onMedia = screen == .media || screen == .openLink
         return ZStack {
             HomeScreen(model: model, window: window)
-                // Com a Conta por cima, a tela inicial não recebe toques nem é lida.
-                .allowsHitTesting(!onAccount)
-                .accessibilityHidden(onAccount)
-            if onAccount {
+                // Com outra tela por cima, a tela inicial não recebe toques nem é lida.
+                .allowsHitTesting(screen == .home)
+                .accessibilityHidden(screen != .home)
+            if screen == .account {
                 AccountScreen(model: model, window: window)
                     .background(Backdrop())
                     .overlay(BackSwipeEdge(action: { model.app.back() }), alignment: .leading)
                     .transition(.move(edge: .trailing))
                     .zIndex(1)
+            }
+            if onMedia {
+                // A Mídia continua embaixo de "Abrir link", que entra por cima dela.
+                MediaScreen(model: model, window: window)
+                    .allowsHitTesting(screen == .media)
+                    .accessibilityHidden(screen != .media)
+                    .background(Backdrop())
+                    .overlay(BackSwipeEdge(action: { model.app.back() }), alignment: .leading)
+                    .transition(.move(edge: .trailing))
+                    .zIndex(1)
+            }
+            if screen == .openLink {
+                OpenLinkScreen(model: model)
+                    .background(Backdrop())
+                    .overlay(BackSwipeEdge(action: { model.app.back() }), alignment: .leading)
+                    .transition(.move(edge: .trailing))
+                    .zIndex(2)
             }
         }
     }

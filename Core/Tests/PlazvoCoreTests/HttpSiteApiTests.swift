@@ -21,6 +21,8 @@ final class StubServer: @unchecked Sendable {
 
     enum Answer: Sendable {
         case response(status: Int, body: String, headers: [String: String] = [:])
+        /// Só o começo da resposta: o corpo nunca termina de chegar (como uma transmissão sem fim).
+        case endlessBody(status: Int)
         case noConnection
     }
 
@@ -99,6 +101,13 @@ final class StubProtocol: URLProtocol {
         switch server.handle(received) {
         case .noConnection:
             client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
+        case .endlessBody(let status):
+            guard let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: [:]) else {
+                client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+                return
+            }
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: Data("começo do vídeo".utf8))
         case .response(let status, let body, let headers):
             guard let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers) else {
                 client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))

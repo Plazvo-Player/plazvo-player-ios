@@ -7,12 +7,19 @@ import Testing
 struct DemoSceneTests {
     let utc = TimeZone(secondsFromGMT: 0)!
 
-    /// Abre o app numa cena, como a compilação do simulador faz.
+    /// Abre o app numa cena, como a compilação do simulador faz (com o vídeo de mentira, que abre
+    /// e anda sozinho).
     private func open(_ scene: DemoScene) async -> AppBench {
-        let bench = AppBench(now: "2026-11-12T14:30:00Z", random: DemoScene.exampleRandom())
+        let now = parseServerTime("2026-11-12T14:30:00Z")!
+        let bench = AppBench(
+            now: "2026-11-12T14:30:00Z",
+            random: DemoScene.exampleRandom(),
+            storedRecents: scene.storedRecents(now: now),
+            automaticEngine: true
+        )
         await scene.prepare(bench.site, now: bench.clock.now)
         await bench.app.start()
-        await scene.play(on: bench.app)
+        await scene.play(on: bench.app, demoTitle: "Big Buck Bunny (trecho)", patience: 5)
         return bench
     }
 
@@ -34,9 +41,18 @@ struct DemoSceneTests {
         }
     }
 
-    @Test("só as cenas que terminam com a caixa do código aberta esperam pelo teclado")
+    @Test("só as cenas que terminam com um campo à espera do usuário esperam pelo teclado")
     func scenesWithKeyboard() {
-        #expect(DemoScene.allCases.filter(\.showsKeyboard) == [.code, .wrongCode])
+        #expect(DemoScene.allCases.filter(\.showsKeyboard) == [.code, .wrongCode, .link, .wrongLink])
+    }
+
+    @Test("só as cenas do reprodutor terminam com um vídeo aberto")
+    func scenesWithPlayer() async {
+        #expect(DemoScene.allCases.filter(\.showsPlayer) == [.player, .playerProblem])
+        for scene in DemoScene.allCases {
+            let bench = await open(scene)
+            #expect((bench.state.playing != nil) == scene.showsPlayer, "cena \(scene.rawValue)")
+        }
     }
 
     @Test("a hora das fotos é 14:30 do dia, no fuso do aparelho")
@@ -139,6 +155,73 @@ struct DemoSceneTests {
 
         let blocked = await open(.blocked)
         #expect(blocked.state.site.status == .blocked)
+    }
+
+    @Test("cenas da Mídia: sem recentes e com os três recentes do desenho")
+    func mediaScenes() async {
+        let media = await open(.media)
+        #expect(media.state.screen == .media)
+        #expect(media.state.recents.isEmpty)
+        #expect(media.state.playing == nil)
+
+        let recents = await open(.mediaRecents)
+        #expect(recents.state.screen == .media)
+        #expect(recents.state.recents.map(\.title) == ["Aniversário da Ana.mp4", "aula-de-violao-03.mkv", "passeio-na-praia.mov"])
+        let pattern = "%1$@ de %2$@"
+        #expect(recents.state.recents.map { ScreenTexts.recentProgress($0, pattern: pattern) } == ["12:34 de 48:10", "1:02:03", "3:05 de 5:40"])
+        #expect(recents.state.recents.map { ScreenTexts.recentSource($0) } == [
+            TextRef("media_recent_file"), TextRef("media_recent_link", ["exemplo.com"]), TextRef("media_recent_file"),
+        ])
+        // Só a cena dos recentes começa com vídeos guardados.
+        let now = parseServerTime("2026-11-12T14:30:00Z")!
+        #expect(DemoScene.allCases.filter { $0.storedRecents(now: now) != nil } == [.mediaRecents])
+    }
+
+    @Test("cenas do link: o endereço de exemplo digitado e o endereço que não vale")
+    func linkScenes() async {
+        let link = await open(.link)
+        #expect(link.state.screen == .openLink)
+        #expect(!link.state.linkInvalid)
+        #expect(link.state.playing == nil)
+        #expect(DemoScene.link.typedLink == "http://exemplo.com/video.mp4")
+        #expect(VideoLink.normalize(DemoScene.link.typedLink) == "http://exemplo.com/video.mp4")
+
+        let wrong = await open(.wrongLink)
+        #expect(wrong.state.screen == .openLink)
+        #expect(wrong.state.linkInvalid)
+        #expect(wrong.state.playing == nil)
+        #expect(DemoScene.wrongLink.typedLink == "meu video")
+        #expect(DemoScene.home.typedLink.isEmpty)
+    }
+
+    @Test("cena do reprodutor: o vídeo de demonstração parado aos 9 segundos, com os controles na tela")
+    func playerScene() async throws {
+        let bench = await open(.player)
+        #expect(bench.state.screen == .media)
+        #expect(bench.state.playing == PlaybackRequest(kind: .demo, uri: "", title: "Big Buck Bunny (trecho)"))
+        let player = try #require(bench.app.player)
+        #expect(player.state.status == .paused)
+        #expect(player.state.positionMs == 9_000)
+        #expect(player.state.durationMs == 21_600)
+        #expect(player.state.controlsVisible)
+        #expect(player.state.problem == nil)
+        #expect(ScreenTexts.playerTime(positionMs: player.state.positionMs, durationMs: player.state.durationMs) == "0:09 · 0:22")
+        let engine = try #require(bench.engine)
+        #expect(engine.calls == ["open \(FakeAccess.demoAddress) @0", "seek 9000", "pause", "seek 9000"])
+        #expect(!engine.isPlaying)
+    }
+
+    @Test("cena do vídeo que não abriu: o link que ninguém atende dá a mensagem de falta de conexão")
+    func playerProblemScene() async throws {
+        let bench = await open(.playerProblem)
+        #expect(bench.state.screen == .media)
+        #expect(bench.state.playing?.kind == .link)
+        #expect(bench.state.playing?.title == "aula-de-violao-03.mkv")
+        let player = try #require(bench.app.player)
+        #expect(player.state.problem == PlaybackProblem(message: TextRef("player_error_network"), code: 2001))
+        // O endereço da cena fica no próprio aparelho: o pedido não sai para a internet.
+        #expect(VideoLink.host(DemoScene.deadLink) == "127.0.0.1")
+        #expect(bench.diagnosis.asked == [FakeDiagnosis.Question(kind: .link, address: DemoScene.deadLink)])
     }
 
     @Test("cena do copiado: a chave de exemplo vai para a área de transferência e o aviso fica na tela")

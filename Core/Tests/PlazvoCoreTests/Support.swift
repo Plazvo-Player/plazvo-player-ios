@@ -84,3 +84,155 @@ final class Bench {
 
 let serverList = FakeSite.List(id: 7, name: "Casa", url: "http://servidor.exemplo:8080")
 let linkList = FakeSite.List(id: 9, name: "Sala", type: "m3u", url: "http://exemplo.test/lista.m3u")
+
+// MARK: - Mídia e vídeo
+
+/// O motor de vídeo de mentira: guarda o que foi pedido a ele e avisa o que o teste mandar.
+@MainActor
+final class FakeEngine: VideoEngine {
+    var onEvent: ((EngineEvent) -> Void)?
+
+    /// O que foi pedido ao motor, na ordem: "open <endereço> @<ponto>", "play", "pause", "stop",
+    /// "seek <ponto>", "rate <velocidade>".
+    private(set) var calls: [String] = []
+
+    var isPlaying = false
+    var positionMs: Int64 = 0
+    var durationMs: Int64 = 0
+    var isSeekable = true
+    var rate: Double = 1 {
+        didSet { calls.append("rate \(rate)") }
+    }
+    var audioTracks: [MediaTrack] = []
+    var audioTrack: Int?
+    var subtitleTracks: [MediaTrack] = []
+    var subtitleTrack: Int?
+
+    /// Com isto, o motor se comporta sozinho como um de verdade (para os testes das telas e das
+    /// cenas): o vídeo abre e anda; o que tem um destes trechos no endereço dá erro.
+    var automatic = false
+    var failing: [String] = ["127.0.0.1:9"]
+    var automaticDurationMs: Int64 = 21_600
+
+    func open(uri: String, startAtMs: Int64) {
+        calls.append("open \(uri) @\(startAtMs)")
+        positionMs = startAtMs
+        isPlaying = false
+        guard automatic else { return }
+        let fails = failing.contains { uri.contains($0) }
+        Task { @MainActor in
+            self.emit(.opening)
+            if fails {
+                self.emit(.failed)
+            } else {
+                self.startPlaying(durationMs: self.automaticDurationMs, at: startAtMs)
+            }
+        }
+    }
+
+    func play() {
+        calls.append("play")
+        isPlaying = true
+    }
+
+    func pause() {
+        calls.append("pause")
+        isPlaying = false
+    }
+
+    func stop() {
+        calls.append("stop")
+        isPlaying = false
+    }
+
+    func seek(toMs: Int64) {
+        calls.append("seek \(toMs)")
+        positionMs = toMs
+        guard automatic, isPlaying else { return }
+        Task { @MainActor in self.advance(to: toMs + 250) }
+    }
+
+    func forgetCalls() {
+        calls = []
+    }
+
+    func emit(_ event: EngineEvent) {
+        onEvent?(event)
+    }
+
+    /// O vídeo abriu e está andando: o aviso de que abriu e dois avisos de tempo seguidos.
+    func startPlaying(durationMs: Int64 = 600_000, at positionMs: Int64 = 0) {
+        self.durationMs = durationMs
+        isPlaying = true
+        emit(.playing)
+        advance(to: positionMs)
+        advance(to: positionMs + 250)
+    }
+
+    /// O vídeo andou até este ponto.
+    func advance(to positionMs: Int64) {
+        self.positionMs = positionMs
+        emit(.time(positionMs: positionMs, durationMs: durationMs))
+    }
+}
+
+/// O acesso aos vídeos de mentira: o de demonstração tem um endereço fixo; os outros, o próprio.
+@MainActor
+final class FakeAccess: MediaAccess {
+    static let demoAddress = "file:///app/demo_video.mp4"
+
+    /// Os vídeos que não estão mais lá.
+    var missing: Set<String> = []
+    private(set) var asked: [PlaybackRequest] = []
+    private(set) var closes = 0
+
+    func open(_ request: PlaybackRequest) -> String? {
+        asked.append(request)
+        if request.kind == .demo { return FakeAccess.demoAddress }
+        return missing.contains(request.uri) ? nil : request.uri
+    }
+
+    func close() {
+        closes += 1
+    }
+}
+
+/// A conferência das falhas de mentira: responde o que o teste combinar.
+final class FakeDiagnosis: PlaybackDiagnosis, @unchecked Sendable {
+    struct Question: Equatable {
+        let kind: MediaKind
+        let address: String
+    }
+
+    private let lock = NSLock()
+    private var answer = PlaybackFailure.network
+    private var delay: UInt64 = 0
+    private var questions: [Question] = []
+
+    /// A próxima resposta e quanto ela demora, em segundos.
+    func willAnswer(_ failure: PlaybackFailure, after seconds: Double = 0) {
+        lock.lock()
+        answer = failure
+        delay = UInt64(seconds * 1_000_000_000)
+        lock.unlock()
+    }
+
+    var asked: [Question] {
+        lock.lock()
+        defer { lock.unlock() }
+        return questions
+    }
+
+    func failure(of kind: MediaKind, address: String) async -> PlaybackFailure {
+        let (failure, wait) = record(Question(kind: kind, address: address))
+        if wait > 0 { try? await Task.sleep(nanoseconds: wait) }
+        return failure
+    }
+
+    private func record(_ question: Question) -> (PlaybackFailure, UInt64) {
+        lock.lock()
+        defer { lock.unlock() }
+        questions.append(question)
+        return (answer, delay)
+    }
+}

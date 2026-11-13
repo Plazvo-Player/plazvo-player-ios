@@ -89,13 +89,14 @@ foto() { # $1 = udid; $2 = nome da foto (sem .png); $3 = cena; $4 = "deitado" (o
   else
     xcrun simctl launch "$udid" "$ID_DO_APP" -AppleLanguages "(pt-BR)" -AppleLocale "pt_BR" -PlazvoCena "$cena" > /dev/null
   fi
-  # Até 90 segundos (a primeira abertura num simulador recém-ligado demora).
-  until [ -f "$pronto" ] || [ "$espera" -ge 180 ]; do
+  # Até 3 minutos (a primeira abertura num simulador recém-ligado demora, e as cenas do
+  # reprodutor esperam o vídeo abrir).
+  until [ -f "$pronto" ] || [ "$espera" -ge 360 ]; do
     sleep 0.5
     espera=$((espera + 1))
   done
   if [ ! -f "$pronto" ]; then
-    echo "Foto $nome: a cena \"$cena\" não ficou pronta em 90 segundos" | tee -a resultado/resumo.txt
+    echo "Foto $nome: a cena \"$cena\" não ficou pronta em 3 minutos" | tee -a resultado/resumo.txt
     FALHAS=$((FALHAS + 1))
   fi
   pronta=$(( $(date +%s) - inicio ))
@@ -197,9 +198,17 @@ if [ -n "$IPHONE" ]; then
   foto "$IPHONE" "iphone-11-bloqueado" "bloqueado"
   foto "$IPHONE" "iphone-12-vencendo" "vencendo"
   foto "$IPHONE" "iphone-13-vencido" "vencido"
+  foto "$IPHONE" "iphone-14-midia" "midia"
+  foto "$IPHONE" "iphone-15-midia-recentes" "midia-recentes"
+  foto "$IPHONE" "iphone-16-link" "link"
+  foto "$IPHONE" "iphone-17-link-errado" "link-errado"
   foto "$IPHONE" "iphone-deitado-1-inicial" "inicial" deitado
   foto "$IPHONE" "iphone-deitado-2-conta" "conta" deitado
   foto "$IPHONE" "iphone-deitado-3-codigo" "codigo" deitado
+  foto "$IPHONE" "iphone-deitado-4-midia-recentes" "midia-recentes" deitado
+  # No iPhone o reprodutor deita a tela sozinho (o vídeo das cenas é deitado).
+  foto "$IPHONE" "iphone-deitado-5-reprodutor" "reprodutor" deitado
+  foto "$IPHONE" "iphone-deitado-6-video-falhou" "video-falhou" deitado
   xcrun simctl shutdown "$IPHONE" || true
 fi
 
@@ -210,10 +219,14 @@ if [ -n "$IPAD" ]; then
   foto "$IPAD" "ipad-2-conta" "conta"
   foto "$IPAD" "ipad-3-ativo" "ativo"
   foto "$IPAD" "ipad-4-codigo" "codigo"
+  foto "$IPAD" "ipad-5-midia-recentes" "midia-recentes"
+  foto "$IPAD" "ipad-6-reprodutor" "reprodutor"
   if deitar_ipad "$IPAD"; then
     sleep 5
     foto "$IPAD" "ipad-deitado-1-ativo" "ativo" deitado
     foto "$IPAD" "ipad-deitado-2-conta" "conta" deitado
+    foto "$IPAD" "ipad-deitado-3-midia-recentes" "midia-recentes" deitado
+    foto "$IPAD" "ipad-deitado-4-reprodutor" "reprodutor" deitado
   else
     echo "iPad deitado: não deu para girar o simulador; as fotos deitadas do iPad ficaram de fora" | tee -a resultado/resumo.txt
   fi
