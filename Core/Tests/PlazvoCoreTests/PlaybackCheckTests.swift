@@ -5,6 +5,24 @@ import FoundationNetworking
 import Testing
 @testable import PlazvoCore
 
+/// Guarda a resposta de uma conferência feita por outra tarefa.
+private final class AnswerBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: PlaybackFailure?
+
+    var value: PlaybackFailure? {
+        lock.lock()
+        defer { lock.unlock() }
+        return stored
+    }
+
+    func set(_ failure: PlaybackFailure) {
+        lock.lock()
+        stored = failure
+        lock.unlock()
+    }
+}
+
 @Suite("Conferência de um vídeo que não abriu")
 struct PlaybackCheckTests {
     let server = StubServer()
@@ -52,15 +70,16 @@ struct PlaybackCheckTests {
         server.willAnswer(.silence)
         let check = self.check
         let address = link()
-        let started = Date()
-        let asking = Task { await check.failure(of: .link, address: address) }
+        let answer = AnswerBox()
+        let asking = Task { answer.set(await check.failure(of: .link, address: address)) }
         #expect(await eventually { !self.server.requests.isEmpty })
 
         asking.cancel()
 
-        // Sem o cancelamento, a resposta só viria no fim do tempo de espera (8 segundos).
-        #expect(await asking.value == .network)
-        #expect(Date().timeIntervalSince(started) < 4)
+        // Sem o cancelamento, a resposta só viria no fim do tempo de espera, se viesse. (O teste
+        // espera por ela no máximo 5 segundos, em vez de ficar preso junto com o pedido.)
+        #expect(await eventually { answer.value != nil })
+        #expect(answer.value == .network)
 
         // Desistência antes de começar: o pedido nem sai do aparelho.
         let before = server.requests.count

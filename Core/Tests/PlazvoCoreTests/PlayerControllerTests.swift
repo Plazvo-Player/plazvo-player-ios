@@ -953,6 +953,22 @@ struct PlayerFailureTests {
         bench.engine.forgetCalls()
         bench.player.retry()
         #expect(bench.engine.calls == ["open \(PlayerBench.link.uri) @4200000"])
+
+        // O mesmo nos últimos segundos do vídeo: o "fim" que vem depois do erro não vale por um
+        // fim de verdade (a tela não mostra o vídeo como terminado).
+        let late = PlayerBench()
+        late.diagnosis.willAnswer(.network, after: 0.05)
+        late.play(durationMs: 7_200_000)
+        late.engine.advance(to: 7_190_000)
+        late.engine.emit(.failed)
+        late.engine.emit(.ended)
+        #expect(late.state.status != .ended)
+        #expect(await eventually { late.state.problem != nil })
+        #expect(late.state.problem?.code == 2001)
+        #expect(late.state.positionMs == 7_190_000)
+        late.engine.forgetCalls()
+        late.player.retry()
+        #expect(late.engine.calls == ["open \(PlayerBench.link.uri) @7190000"])
     }
 
     @Test("erro depois do fim de verdade: o vídeo já acabou, nada muda")
