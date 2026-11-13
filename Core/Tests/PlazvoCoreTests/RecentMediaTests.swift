@@ -53,6 +53,20 @@ struct RecentMediaTests {
         #expect(formatDuration(754_000) == "12:34")
         #expect(formatDuration(3_723_000) == "1:02:03")
         #expect(formatDuration(36_000_000) == "10:00:00")
+        // O maior número que existe não derruba a conta.
+        #expect(formatDuration(Int64.max) == "2562047788015:12:56")
+        #expect(formatDuration(Int64.min) == "0:00")
+    }
+
+    @Test("o ponto está no fim do vídeo nos últimos 5 segundos ou nos últimos 2%, o que for maior")
+    func nearEndRule() {
+        #expect(RecentMedia.isNearEnd(positionMs: 15_001, durationMs: 20_000))
+        #expect(!RecentMedia.isNearEnd(positionMs: 15_000, durationMs: 20_000))
+        #expect(RecentMedia.isNearEnd(positionMs: 7_056_001, durationMs: 7_200_000))
+        #expect(!RecentMedia.isNearEnd(positionMs: 7_056_000, durationMs: 7_200_000))
+        // Sem duração conhecida, nunca.
+        #expect(!RecentMedia.isNearEnd(positionMs: 30_000, durationMs: 0))
+        #expect(!RecentMedia.isNearEnd(positionMs: 0, durationMs: -1))
     }
 
     @Test("o pedido e o vídeo recente nunca mostram o endereço num registro")
@@ -242,6 +256,67 @@ struct RecentMediaStoreTests {
         """.utf8)
         let store = open()
         #expect(store.items.map(\.uri) == ["http://exemplo.com/a.mp4", "file:///videos/1.mp4"])
+        #expect(store.items[0].positionMs == 5_000)
+    }
+
+    @Test("o que o app nunca teria gravado fica de fora: demonstração, link que não vale, arquivo sem endereço de arquivo")
+    func notWrittenByTheApp() {
+        copy.data = Data("""
+        [
+          {"uri": "", "title": "Demonstração", "kind": "demo", "position": 0, "duration": 0, "lastPlayed": 9},
+          {"uri": "file:///etc/hosts", "title": "hosts", "kind": "link", "position": 0, "duration": 0, "lastPlayed": 8},
+          {"uri": "smb://exemplo.test/pasta/a.mkv", "title": "a.mkv", "kind": "link", "position": 0, "duration": 0, "lastPlayed": 7},
+          {"uri": "exemplo.com/sem-http.mp4", "title": "sem-http.mp4", "kind": "link", "position": 0, "duration": 0, "lastPlayed": 6},
+          {"uri": "http://exemplo.com/com espaço.mp4", "title": "com espaço.mp4", "kind": "link", "position": 0, "duration": 0, "lastPlayed": 5},
+          {"uri": "http://exemplo.com/a.mp4", "title": "a.mp4", "kind": "file", "position": 0, "duration": 0, "lastPlayed": 4},
+          {"uri": "http://usuario:senha@exemplo.com:8080/a%20b.mp4?x=1", "title": "a b.mp4", "kind": "link", "position": 0, "duration": 0, "lastPlayed": 3},
+          {"uri": "file:///videos/1.mp4", "title": "Vídeo 1", "kind": "file", "position": 0, "duration": 0, "lastPlayed": 2}
+        ]
+        """.utf8)
+        let store = open()
+        #expect(store.items.map(\.uri) == ["http://usuario:senha@exemplo.com:8080/a%20b.mp4?x=1", "file:///videos/1.mp4"])
+    }
+
+    @Test("números fora da faixa são acertados ao ler, e a tela não cai por causa deles")
+    func outOfRangeNumbers() {
+        copy.data = Data("""
+        [
+          {"uri": "file:///videos/1.mp4", "title": "Vídeo 1", "kind": "file", "position": 9223372036854775807, "duration": 9223372036854775807, "lastPlayed": 9223372036854775807},
+          {"uri": "file:///videos/2.mp4", "title": "Vídeo 2", "kind": "file", "position": -9223372036854775808, "duration": -5, "lastPlayed": -1},
+          {"uri": "file:///videos/3.mp4", "title": "Vídeo 3", "kind": "file", "position": 1e30, "duration": 60000, "lastPlayed": 1}
+        ]
+        """.utf8)
+        let store = open()
+        #expect(store.items.map(\.uri) == ["file:///videos/1.mp4", "file:///videos/2.mp4"])
+        #expect(store.items[0].positionMs == RecentMedia.maxTimeMs)
+        #expect(store.items[0].durationMs == RecentMedia.maxTimeMs)
+        #expect(store.items[1].positionMs == 0)
+        #expect(store.items[1].durationMs == 0)
+        // As contas que a tela e o reprodutor fazem com esses números.
+        for item in store.items {
+            _ = item.progress
+            _ = item.resumePositionMs
+            _ = ScreenTexts.recentProgress(item, pattern: "%1$@ de %2$@")
+            _ = formatDuration(item.positionMs + 10_000)
+        }
+        #expect(ScreenTexts.recentProgress(store.items[0], pattern: "%1$@ de %2$@") == "596:31:24 de 596:31:24")
+        // Gravar um ponto fora da faixa também é acertado.
+        store.savePosition("file:///videos/2.mp4", positionMs: Int64.max, durationMs: Int64.max)
+        #expect(store.items[1].positionMs == RecentMedia.maxTimeMs)
+        #expect(store.items[1].durationMs == RecentMedia.maxTimeMs)
+    }
+
+    @Test("o mesmo vídeo repetido no que estava guardado aparece uma vez só (vale o primeiro)")
+    func duplicates() {
+        copy.data = Data("""
+        [
+          {"uri": "file:///videos/1.mp4", "title": "Primeiro", "kind": "file", "position": 5000, "duration": 60000, "lastPlayed": 3},
+          {"uri": "http://exemplo.com/a.mp4", "title": "a.mp4", "kind": "link", "position": 0, "duration": 0, "lastPlayed": 2},
+          {"uri": "file:///videos/1.mp4", "title": "Repetido", "kind": "file", "position": 9000, "duration": 60000, "lastPlayed": 1}
+        ]
+        """.utf8)
+        let store = open()
+        #expect(store.items.map(\.title) == ["Primeiro", "a.mp4"])
         #expect(store.items[0].positionMs == 5_000)
     }
 

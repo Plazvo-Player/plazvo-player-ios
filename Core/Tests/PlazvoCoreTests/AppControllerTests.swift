@@ -258,7 +258,66 @@ struct AppControllerTests {
         #expect(!bench.state.linkInvalid)
     }
 
-    @Test("o último link aberto fica guardado para corrigir, fora do estado das telas")
+    @Test("o link que tocou não volta para o campo; o que não abriu volta, para corrigir")
+    func lastLinkOnlyAfterAFailure() async throws {
+        await bench.app.start()
+        let secret = "http://usuario:senha@exemplo.com:8080/a.mp4"
+
+        // Não abriu: o endereço fica para o usuário corrigir.
+        bench.diagnosis.willAnswer(.network)
+        bench.app.openLink(secret)
+        try #require(bench.engine).emit(.failed)
+        #expect(await eventually { self.bench.app.player?.state.problem != nil })
+        bench.app.closePlayer()
+        #expect(bench.app.lastLink == secret)
+        #expect(bench.state.recents.isEmpty)
+
+        // Abriu, mas nem chegou a tocar (o usuário saiu antes): também fica.
+        bench.app.openLink(secret)
+        try #require(bench.engine).emit(.opening)
+        bench.app.closePlayer()
+        #expect(bench.app.lastLink == secret)
+
+        // Tocou: está nos recentes (só com o nome e o servidor à mostra) e sai do campo.
+        bench.app.openLink(secret)
+        try #require(bench.engine).startPlaying()
+        #expect(bench.app.lastLink == secret)
+        bench.app.closePlayer()
+        #expect(bench.app.lastLink.isEmpty)
+        #expect(bench.state.recents.map(\.title) == ["a.mp4"])
+
+        // Outro link tentado depois, sem tocar, e um vídeo que toca no lugar dele: o link tentado fica.
+        bench.app.openLink("http://exemplo.com/outro.mp4")
+        bench.app.playDemo(title: "Demonstração")
+        try #require(bench.engine).startPlaying(durationMs: 21_600)
+        bench.app.closePlayer()
+        #expect(bench.app.lastLink == "http://exemplo.com/outro.mp4")
+    }
+
+    @Test("um vídeo novo no lugar de um link que tocou: o endereço do link também sai do campo")
+    func lastLinkClearedWhenReplaced() async throws {
+        await bench.app.start()
+        bench.app.openLink("http://usuario:senha@exemplo.com:8080/a.mp4")
+        try #require(bench.engine).startPlaying()
+
+        bench.app.playDemo(title: "Demonstração")
+
+        #expect(bench.app.lastLink.isEmpty)
+    }
+
+    @Test("Limpar os recentes apaga também o último link tentado")
+    func clearingRecentsForgetsTheLastLink() async {
+        await bench.app.start()
+        bench.app.openLink("http://usuario:senha@exemplo.com:8080/a.mp4")
+        bench.app.closePlayer()
+        #expect(!bench.app.lastLink.isEmpty)
+
+        bench.app.clearRecents()
+
+        #expect(bench.app.lastLink.isEmpty)
+    }
+
+    @Test("o último link tentado fica fora do estado das telas")
     func lastLinkStaysOutOfState() async {
         await bench.app.start()
         bench.app.openLink("http://usuario:senha@exemplo.com:8080/a.mp4")

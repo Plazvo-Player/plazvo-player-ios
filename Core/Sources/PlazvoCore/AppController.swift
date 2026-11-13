@@ -112,8 +112,10 @@ public final class AppController {
     /// O reprodutor do vídeo aberto (`state.playing`), ou `nil`.
     public private(set) var player: PlayerController?
 
-    /// O último endereço aberto em "Abrir link de vídeo", para corrigir sem digitar tudo de novo.
-    /// Fica fora do estado das telas: pode levar usuário e senha.
+    /// O último endereço tentado em "Abrir link de vídeo" que não chegou a tocar, para corrigir
+    /// sem digitar tudo de novo. Some quando o vídeo toca (aí ele está na lista de recentes, sem
+    /// o endereço à mostra) e quando a lista de recentes é limpa. Fica fora do estado das telas:
+    /// pode levar usuário e senha.
     public private(set) var lastLink = ""
 
     private let identityStore: DeviceIdentityStore
@@ -341,22 +343,31 @@ public final class AppController {
         play(item.request)
     }
 
-    /// Mídia › Recentes › Limpar.
+    /// Mídia › Recentes › Limpar. O último endereço tentado vai junto.
     public func clearRecents() {
         recentMedia.clear()
+        lastLink = ""
     }
 
     /// Sai do reprodutor: a seta de voltar dele, o gesto de voltar ou "Voltar" na mensagem de falha.
     public func closePlayer() {
+        guard player != nil else { return }
+        finishPlayer()
+        update { $0.playing = nil }
+    }
+
+    /// Fecha o reprodutor aberto, se houver.
+    private func finishPlayer() {
         guard let open = player else { return }
         player = nil
         open.close()
-        update { $0.playing = nil }
+        // O link que tocou não precisa de conserto: o endereço dele não volta para a tela.
+        if open.hasPlayed, open.request.kind == .link, open.request.uri == lastLink { lastLink = "" }
     }
 
     private func play(_ request: PlaybackRequest) {
         // Um pedido novo recomeça o reprodutor do zero.
-        player?.close()
+        finishPlayer()
         let controller = PlayerController(
             request: request,
             engine: playback.makeEngine(),

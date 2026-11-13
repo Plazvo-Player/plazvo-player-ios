@@ -53,7 +53,7 @@ struct MediaScreen: View {
                     )
                     if !model.state.recents.isEmpty {
                         RecentsHeader(onClear: { model.app.clearRecents() })
-                        ForEach(model.state.recents, id: \.uri) { item in
+                        ForEach(Array(model.state.recents.enumerated()), id: \.offset) { _, item in
                             RecentCard(item: item, compact: false, action: { model.app.openRecent(item) })
                         }
                     }
@@ -99,7 +99,7 @@ struct MediaScreen: View {
                 RecentsHeader(onClear: { model.app.clearRecents() })
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(alignment: .top, spacing: 12) {
-                        ForEach(model.state.recents, id: \.uri) { item in
+                        ForEach(Array(model.state.recents.enumerated()), id: \.offset) { _, item in
                             RecentCard(item: item, compact: true, action: { model.app.openRecent(item) })
                                 .frame(width: 240)
                         }

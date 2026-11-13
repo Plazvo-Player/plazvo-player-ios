@@ -25,6 +25,8 @@ final class StubServer: @unchecked Sendable {
         /// pedaço do corpo e mais nada (o corpo nunca termina de chegar).
         case endlessBody(status: Int)
         case noConnection
+        /// O servidor recebe o pedido e não responde nada.
+        case silence
     }
 
     private static let lock = NSLock()
@@ -100,6 +102,8 @@ final class StubProtocol: URLProtocol {
             body: StubProtocol.body(of: request)
         )
         switch server.handle(received) {
+        case .silence:
+            break
         case .noConnection:
             client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
         case .endlessBody(let status):

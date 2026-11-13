@@ -47,8 +47,8 @@ public final class RecentMediaStore {
     public func savePosition(_ uri: String, positionMs: Int64, durationMs: Int64) {
         guard let index = items.firstIndex(where: { $0.uri == uri }) else { return }
         var all = items
-        all[index].positionMs = max(positionMs, 0)
-        all[index].durationMs = max(durationMs, 0)
+        all[index].positionMs = min(max(positionMs, 0), RecentMedia.maxTimeMs)
+        all[index].durationMs = min(max(durationMs, 0), RecentMedia.maxTimeMs)
         save(all)
     }
 
@@ -65,10 +65,29 @@ public final class RecentMediaStore {
     }
 
     /// O que estava guardado. Dados estragados viram lista vazia (em vez de travar o app), e um
-    /// item que não dá para ler fica de fora.
+    /// item que não dá para ler, ou que o app nunca teria gravado, fica de fora.
     private static func decode(_ data: Data?) -> [RecentMedia] {
         guard let data, let entries = try? JSONDecoder().decode([Entry].self, from: data) else { return [] }
-        return Array(entries.compactMap(\.item).prefix(maxItems))
+        var seen = Set<String>()
+        var result: [RecentMedia] = []
+        for entry in entries {
+            guard result.count < maxItems, var item = entry.item, isStorable(item) else { continue }
+            // O mesmo vídeo só aparece uma vez (vale o primeiro, o mais recente).
+            guard seen.insert(item.uri).inserted else { continue }
+            item.positionMs = min(max(item.positionMs, 0), RecentMedia.maxTimeMs)
+            item.durationMs = min(max(item.durationMs, 0), RecentMedia.maxTimeMs)
+            result.append(item)
+        }
+        return result
+    }
+
+    /// O app só grava arquivos do aparelho e links que ele mesmo aceitou em "Abrir link de vídeo".
+    private static func isStorable(_ item: RecentMedia) -> Bool {
+        switch item.kind {
+        case .demo: return false
+        case .file: return item.uri.hasPrefix("file://")
+        case .link: return VideoLink.normalize(item.uri) == item.uri
+        }
     }
 
     private struct Entry: Decodable {

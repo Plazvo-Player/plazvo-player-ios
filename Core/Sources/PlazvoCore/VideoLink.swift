@@ -1,11 +1,19 @@
 import Foundation
 
-/// Tratamento dos endereços de vídeo digitados pelo usuário (o mesmo do app Android).
+/// Tratamento dos endereços de vídeo digitados pelo usuário (o mesmo do app Android, com duas
+/// diferenças: o tamanho tem limite e o nome do servidor só aceita letras sem acento).
 public enum VideoLink {
+    /// O maior endereço aceito, em bytes. (Um endereço de verdade, mesmo com uma chave de acesso
+    /// comprida, fica bem abaixo disso; um texto enorme colado por engano travaria a tela.)
+    public static let maxLength = 8_192
+
     /// Devolve o endereço pronto para abrir, ou `nil` se não for um endereço http/https válido.
     /// Sem "http://" na frente, assume http (o servidor redireciona para https quando precisa).
     public static func normalize(_ input: String) -> String? {
+        // Com folga para os espaços das pontas; o limite de verdade é conferido logo abaixo.
+        guard input.utf8.count <= maxLength * 2 else { return nil }
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: " ", with: "%20")
+        guard text.utf8.count <= maxLength else { return nil }
         if text.isEmpty || text.unicodeScalars.contains(where: isSpaceOrControl) { return nil }
 
         let (found, rest) = splitScheme(text)
@@ -13,6 +21,18 @@ public enum VideoLink {
         guard scheme == "http" || scheme == "https" else { return nil }
         guard isValidAuthority(authority(of: rest)) else { return nil }
         return "\(scheme)://\(rest)"
+    }
+
+    /// O começo do texto, até o tamanho do maior endereço aceito, sem partir uma letra ao meio.
+    /// (Para o campo do endereço: um texto enorme colado por engano não fica nele.)
+    public static func fitted(_ text: String) -> String {
+        let bytes = text.utf8
+        guard bytes.count > maxLength else { return text }
+        var end = bytes.index(bytes.startIndex, offsetBy: maxLength)
+        while end > bytes.startIndex, end.samePosition(in: text.unicodeScalars) == nil {
+            bytes.formIndex(before: &end)
+        }
+        return String(text[..<end])
     }
 
     /// Nome para mostrar na lista: o fim do endereço (nunca o caminho todo, que pode ter senha).
@@ -31,22 +51,33 @@ public enum VideoLink {
         host(of: authority(of: splitScheme(url).rest))
     }
 
-    /// O endereço como ele viaja: o que um endereço não aceita depois do nome do servidor (letra
-    /// acentuada, colchete, barra em pé…) vira o código dele ("%C3%AD"). O que já é código fica
-    /// como está; um "%" solto vira "%25".
+    /// O endereço como ele viaja: o que um endereço não aceita (letra acentuada, colchete, barra
+    /// em pé…) vira o código dele ("%C3%AD"), no usuário e na senha e em tudo o que vem depois do
+    /// nome do servidor. O que já é código fica como está; um "%" solto vira "%25".
     public static func encoded(_ url: String) -> String {
         let (scheme, rest) = splitScheme(url)
         let server = authority(of: rest)
-        let bytes = Array(rest.dropFirst(server.count).utf8)
         var result = String.UnicodeScalarView()
-        result.append(contentsOf: ((scheme.map { "\($0)://" } ?? "") + server).unicodeScalars)
+        result.append(contentsOf: (scheme.map { "\($0)://" } ?? "").unicodeScalars)
+        if let at = server.lastIndex(of: "@") {
+            // Usuário e senha: um "@" a mais (o da senha) também vira código.
+            append(Array(server[..<at].utf8), to: &result, allowed: isAllowedInUserInfo)
+            result.append(contentsOf: server[at...].unicodeScalars)
+        } else {
+            result.append(contentsOf: server.unicodeScalars)
+        }
+        append(Array(rest.dropFirst(server.count).utf8), to: &result, allowed: isAllowedAfterServer)
+        return String(result)
+    }
+
+    private static func append(_ bytes: [UInt8], to result: inout String.UnicodeScalarView, allowed: (UInt8) -> Bool) {
         let digits = Array("0123456789ABCDEF".unicodeScalars)
         for (index, byte) in bytes.enumerated() {
             let keep: Bool
             if byte == UInt8(ascii: "%") {
                 keep = index + 2 < bytes.count && isHexDigit(bytes[index + 1]) && isHexDigit(bytes[index + 2])
             } else {
-                keep = isAllowedAfterServer(byte)
+                keep = allowed(byte)
             }
             if keep {
                 result.append(Unicode.Scalar(byte))
@@ -56,7 +87,6 @@ public enum VideoLink {
                 result.append(digits[Int(byte & 0x0F)])
             }
         }
-        return String(result)
     }
 
     // MARK: - Partes do endereço
@@ -101,12 +131,16 @@ public enum VideoLink {
         var port = Substring(hostPort)
         if port.hasPrefix(host) { port = port.dropFirst(host.count) }
         if port.hasPrefix(":") { port = port.dropFirst() }
-        // A porta, quando há, é só de algarismos comuns (0 a 9).
+        // A porta, quando há, é só de algarismos comuns (0 a 9) e vai até 65535.
         if port.unicodeScalars.contains(where: { !("0"..."9").contains($0) }) { return false }
+        if !port.isEmpty, port.count > 5 || (Int(port) ?? 0) > 65_535 { return false }
         if host.hasPrefix("[") { return host.count > 2 && hostPort.contains("]") }
+        // O nome do servidor: só letras sem acento, algarismos comuns, ponto, traço e sublinhado.
+        // (Nome com acento ou com letras de outros alfabetos tem uma forma escrita só com essas
+        // letras, e é essa que o endereço leva; o que aparece na tela é igual ao que é aberto.)
         let scalars = host.unicodeScalars
-        return scalars.contains(where: isLetterOrDigit)
-            && scalars.allSatisfy { isLetterOrDigit($0) || $0 == "." || $0 == "-" || $0 == "_" }
+        return scalars.contains(where: isASCIILetterOrDigit)
+            && scalars.allSatisfy { isASCIILetterOrDigit($0) || $0 == "." || $0 == "-" || $0 == "_" }
     }
 
     // MARK: - Letras
@@ -118,6 +152,16 @@ public enum VideoLink {
             return true
         default:
             return "-._~:/?#@!$&'()*+,;=".utf8.contains(byte)
+        }
+    }
+
+    /// O que pode aparecer como está no usuário e na senha.
+    private static func isAllowedInUserInfo(_ byte: UInt8) -> Bool {
+        switch byte {
+        case UInt8(ascii: "a")...UInt8(ascii: "z"), UInt8(ascii: "A")...UInt8(ascii: "Z"), UInt8(ascii: "0")...UInt8(ascii: "9"):
+            return true
+        default:
+            return "-._~:!$&'()*+,;=".utf8.contains(byte)
         }
     }
 
@@ -138,13 +182,8 @@ public enum VideoLink {
         isASCIILetter(scalar) || ("0"..."9").contains(scalar) || scalar == "+" || scalar == "." || scalar == "-"
     }
 
-    private static func isLetterOrDigit(_ scalar: Unicode.Scalar) -> Bool {
-        switch scalar.properties.generalCategory {
-        case .uppercaseLetter, .lowercaseLetter, .titlecaseLetter, .modifierLetter, .otherLetter, .decimalNumber:
-            return true
-        default:
-            return false
-        }
+    private static func isASCIILetterOrDigit(_ scalar: Unicode.Scalar) -> Bool {
+        isASCIILetter(scalar) || ("0"..."9").contains(scalar)
     }
 
     private static func isSpaceOrControl(_ scalar: Unicode.Scalar) -> Bool {

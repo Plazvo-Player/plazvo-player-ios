@@ -7,8 +7,9 @@ import UIKit
 /// (MP4, MKV, TS, HLS…). A lógica só o conhece pelo `VideoEngine`; o que há de regra fica nela, e
 /// aqui só se repassa o que o VLC faz e avisa.
 ///
-/// O VLC não escreve nada em registros (este app não liga nenhum registro dele): o endereço do
-/// vídeo pode levar usuário e senha.
+/// O VLC não escreve nada em registros: o endereço do vídeo pode levar usuário e senha. Isso
+/// vale porque o pacote do VLC usado aqui só traz o registro do sistema, que vem desligado, e
+/// porque este app não liga nenhum registro dele (a compilação confere, em ci/compilar.sh).
 @MainActor
 final class VLCVideoEngine: NSObject, VideoEngine {
     var onEvent: ((EngineEvent) -> Void)?
@@ -24,6 +25,9 @@ final class VLCVideoEngine: NSObject, VideoEngine {
     /// Aberto um vídeo, os avisos só valem a partir do "abrindo" dele: os do vídeo anterior que
     /// ainda estiverem a caminho ficam de fora.
     private var awaitingOpening = true
+    /// O VLC já abriu este vídeo (avisou "tocando" ou o tempo andou). Antes disso ele não recebe
+    /// pedido de pausa: no meio da abertura, o VLC responde a uma pausa desistindo de abrir.
+    private var opened = false
     /// O tamanho do vídeo já avisado.
     private var shownSize = CGSize.zero
 
@@ -66,6 +70,7 @@ final class VLCVideoEngine: NSObject, VideoEngine {
         }
         shownSize = .zero
         awaitingOpening = true
+        opened = false
         active = true
         player.delegate = listener
         player.drawable = surface
@@ -79,7 +84,7 @@ final class VLCVideoEngine: NSObject, VideoEngine {
     }
 
     func pause() {
-        guard active else { return }
+        guard active, opened else { return }
         player.pause()
     }
 
@@ -168,6 +173,7 @@ final class VLCVideoEngine: NSObject, VideoEngine {
         case .buffering:
             onEvent?(.buffering)
         case .playing:
+            opened = true
             onEvent?(.playing)
         case .ended:
             onEvent?(.ended)
@@ -185,6 +191,7 @@ final class VLCVideoEngine: NSObject, VideoEngine {
 
     fileprivate func timeChanged() {
         guard active, !awaitingOpening else { return }
+        opened = true
         onEvent?(.time(positionMs: positionMs, durationMs: durationMs))
         if shownSize == .zero { checkVideoSize() }
     }

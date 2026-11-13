@@ -80,9 +80,19 @@ public struct RecentMedia: Equatable, Sendable, Codable, CustomStringConvertible
     /// Ponto de onde continuar. 0 quando é melhor começar do início (mal começou ou já acabou).
     public var resumePositionMs: Int64 {
         if positionMs < RecentMedia.minResumeMs { return 0 }
-        if durationMs > 0, positionMs > durationMs - max(RecentMedia.minResumeMs, durationMs / 50) { return 0 }
+        if RecentMedia.isNearEnd(positionMs: positionMs, durationMs: durationMs) { return 0 }
         return positionMs
     }
+
+    /// O ponto está no fim do vídeo: nos últimos 5 segundos ou nos últimos 2%, o que for maior.
+    /// Sem duração conhecida, nunca.
+    public static func isNearEnd(positionMs: Int64, durationMs: Int64) -> Bool {
+        durationMs > 0 && positionMs > durationMs - max(minResumeMs, durationMs / 50)
+    }
+
+    /// O maior tempo que o app guarda ou mostra (o maior que o motor de vídeo informa: perto de
+    /// 600 horas). Um número maior que este só aparece num arquivo estragado.
+    public static let maxTimeMs = Int64(Int32.max)
 
     /// O pedido que reabre este vídeo.
     public var request: PlaybackRequest {
@@ -99,7 +109,8 @@ public struct RecentMedia: Equatable, Sendable, Codable, CustomStringConvertible
 
 /// Tempo no formato 1:02:03 (com horas) ou 2:03 (sem horas), arredondado como no reprodutor.
 public func formatDuration(_ millis: Int64) -> String {
-    let totalSeconds = (max(millis, 0) + 500) / 1000
+    let whole = max(millis, 0)
+    let totalSeconds = whole / 1000 + (whole % 1000 >= 500 ? 1 : 0)
     let hours = totalSeconds / 3600
     let minutes = totalSeconds % 3600 / 60
     let seconds = totalSeconds % 60

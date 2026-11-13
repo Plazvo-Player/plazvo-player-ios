@@ -114,16 +114,27 @@ final class FakeEngine: VideoEngine {
     var failing: [String] = ["127.0.0.1:9"]
     var automaticDurationMs: Int64 = 21_600
 
+    /// Pedidos de pausa que chegaram antes de o vídeo abrir. O motor de verdade, se recebe a
+    /// pausa no meio da abertura, desiste dela (e avisa "fim"): o reprodutor nunca manda uma.
+    private(set) var earlyPauses = 0
+    /// O vídeo desta abertura já abriu (o motor avisou "tocando").
+    private var opened = false
+
     func open(uri: String, startAtMs: Int64) {
         calls.append("open \(uri) @\(startAtMs)")
         positionMs = startAtMs
         isPlaying = false
+        opened = false
         guard automatic else { return }
         let fails = failing.contains { uri.contains($0) }
+        let pausesBefore = earlyPauses
         Task { @MainActor in
             self.emit(.opening)
             if fails {
                 self.emit(.failed)
+            } else if self.earlyPauses != pausesBefore {
+                // Pausa no meio da abertura: o motor de verdade desiste e avisa "fim".
+                self.emit(.ended)
             } else {
                 self.startPlaying(durationMs: self.automaticDurationMs, at: startAtMs)
             }
@@ -138,6 +149,7 @@ final class FakeEngine: VideoEngine {
     func pause() {
         calls.append("pause")
         isPlaying = false
+        if !opened { earlyPauses += 1 }
     }
 
     func stop() {
@@ -157,6 +169,7 @@ final class FakeEngine: VideoEngine {
     }
 
     func emit(_ event: EngineEvent) {
+        if case .playing = event { opened = true }
         onEvent?(event)
     }
 

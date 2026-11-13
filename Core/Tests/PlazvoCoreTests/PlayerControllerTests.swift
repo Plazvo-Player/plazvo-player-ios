@@ -127,17 +127,26 @@ struct PlayerOpeningTests {
         #expect(second.engine.calls == ["open \(PlayerBench.file.uri) @0"])
     }
 
-    @Test("só entra nos recentes o vídeo que abriu de verdade")
-    func listedOnlyWhenOpened() {
+    @Test("só entra nos recentes o vídeo que tocou de verdade")
+    func listedOnlyWhenPlayed() {
         let bench = PlayerBench()
         bench.player.start()
         bench.engine.emit(.opening)
         bench.engine.emit(.buffering)
         #expect(bench.recents.items.isEmpty)
+        #expect(!bench.player.hasPlayed)
 
+        // O motor achou alguma coisa no endereço, mas ainda não tocou nada.
         bench.engine.durationMs = 600_000
         bench.engine.emit(.playing)
+        bench.engine.advance(to: 0)
+        #expect(bench.recents.items.isEmpty)
+        #expect(!bench.player.hasPlayed)
 
+        // O tempo andou.
+        bench.engine.advance(to: 250)
+
+        #expect(bench.player.hasPlayed)
         #expect(bench.recents.items.map(\.uri) == [PlayerBench.link.uri])
         #expect(bench.recents.items[0].title == "aula 3.mkv")
         #expect(bench.recents.items[0].kind == .link)
@@ -148,6 +157,52 @@ struct PlayerOpeningTests {
         bench.clock.set("2026-11-12T18:00:00Z")
         bench.engine.emit(.playing)
         #expect(bench.recents.items[0].lastPlayedAt == Int64(parseServerTime("2026-11-12T17:30:00Z")!.timeIntervalSince1970 * 1000))
+    }
+
+    @Test("entra nos recentes também pelo aparecimento da imagem e pelo vídeo que não informa o tempo")
+    func listedByPictureOrGrace() {
+        // A imagem apareceu (o tamanho dela chegou antes ou depois de o vídeo abrir).
+        let before = PlayerBench()
+        before.player.start()
+        before.engine.emit(.videoSize(width: 1920, height: 1080))
+        #expect(before.recents.items.isEmpty)
+        before.engine.emit(.playing)
+        #expect(before.recents.items.count == 1)
+
+        let after = PlayerBench()
+        after.player.start()
+        after.engine.emit(.playing)
+        #expect(after.recents.items.isEmpty)
+        after.engine.emit(.videoSize(width: 1920, height: 1080))
+        #expect(after.recents.items.count == 1)
+
+        // Sem imagem e sem tempo (um áudio ao vivo): três segundos depois de abrir.
+        let silent = PlayerBench()
+        silent.player.start()
+        silent.engine.isPlaying = true
+        silent.engine.emit(.playing)
+        silent.tick(5)
+        #expect(silent.recents.items.isEmpty)
+        silent.tick()
+        #expect(silent.recents.items.count == 1)
+        #expect(silent.player.hasPlayed)
+    }
+
+    @Test("endereço que abre e não toca nada (uma lista de vídeos, uma página) não entra nos recentes")
+    func nothingPlayedIsNotListed() async {
+        let bench = PlayerBench()
+        bench.diagnosis.willAnswer(.format)
+        bench.player.start()
+        bench.engine.emit(.opening)
+        bench.engine.emit(.playing)
+        bench.engine.emit(.ended)
+        #expect(await eventually { bench.state.problem != nil })
+        #expect(bench.state.problem?.code == 3003)
+        #expect(bench.recents.items.isEmpty)
+        #expect(!bench.player.hasPlayed)
+        bench.player.close()
+        #expect(bench.recents.items.isEmpty)
+        #expect(bench.copy.data == nil)
     }
 
     @Test("arquivo aberto entra nos recentes com o marcador de acesso")
@@ -428,20 +483,65 @@ struct PlayerControlsTests {
         #expect(bench.state.status == .playing)
     }
 
-    @Test("pausado antes de o vídeo abrir: a pausa vale quando ele abre")
+    @Test("pausado antes de o vídeo abrir: o motor só recebe a pausa quando o vídeo abre")
     func pausedBeforeOpening() {
         let bench = PlayerBench()
         bench.player.start()
         bench.engine.forgetCalls()
+        bench.engine.emit(.opening)
         bench.player.togglePlay()
-        #expect(bench.engine.calls == ["pause"])
+        // Nada vai para o motor: uma pausa no meio da abertura o faria desistir dela.
+        #expect(bench.engine.calls.isEmpty)
         #expect(bench.state.status == .paused)
+        bench.engine.emit(.buffering)
+        bench.tick(4)
+        #expect(bench.engine.calls.isEmpty)
 
         bench.engine.startPlaying()
 
-        #expect(bench.engine.calls == ["pause", "pause"])
+        #expect(bench.engine.calls == ["pause"])
+        #expect(bench.engine.earlyPauses == 0)
         #expect(bench.state.status == .paused)
+        #expect(bench.state.problem == nil)
         #expect(bench.recents.items.count == 1)
+    }
+
+    @Test("pausar e continuar antes de o vídeo abrir: o motor não recebe nada e o vídeo abre rodando")
+    func pausedAndResumedBeforeOpening() {
+        let bench = PlayerBench()
+        bench.player.start()
+        bench.engine.forgetCalls()
+        bench.player.togglePlay()
+        bench.player.togglePlay()
+        #expect(bench.engine.calls.isEmpty)
+        #expect(bench.state.status == .opening)
+
+        bench.engine.startPlaying()
+
+        #expect(bench.engine.calls.isEmpty)
+        #expect(bench.state.status == .playing)
+    }
+
+    @Test("sair do app com o vídeo ainda abrindo: a abertura continua, e o vídeo abre pausado")
+    func backgroundWhileOpening() {
+        let bench = PlayerBench()
+        bench.player.start()
+        bench.engine.forgetCalls()
+        bench.engine.emit(.opening)
+        bench.engine.emit(.buffering)
+
+        bench.player.enterBackground()
+
+        #expect(bench.engine.calls.isEmpty)
+        #expect(bench.state.status == .paused)
+        #expect(bench.state.problem == nil)
+
+        bench.engine.startPlaying()
+
+        #expect(bench.engine.calls == ["pause"])
+        #expect(bench.engine.earlyPauses == 0)
+        #expect(bench.state.status == .paused)
+        #expect(bench.state.problem == nil)
     }
 
     @Test("voltar e avançar 10 segundos, sem passar do começo nem do fim")
@@ -520,6 +620,7 @@ struct PlayerControlsTests {
         #expect(bench.state.rate == 1.5)
         #expect(PlayerController.rates == [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2])
 
+        bench.engine.advance(to: 59_900)
         bench.engine.isPlaying = false
         bench.engine.emit(.ended)
         bench.engine.forgetCalls()
@@ -747,6 +848,127 @@ struct PlayerFailureTests {
         other.engine.emit(.ended)
         #expect(await eventually { other.state.problem != nil })
         #expect(other.state.problem?.code == 3003)
+    }
+
+    @Test("\"fim\" longe do fim: o vídeo parou de chegar; o ponto fica guardado e tentar de novo continua dali")
+    func endedInTheMiddle() async {
+        let bench = PlayerBench()
+        // O endereço ainda responde: não é o formato que impede um vídeo que já estava rodando.
+        bench.diagnosis.willAnswer(.format)
+        bench.play(durationMs: 7_200_000)
+        bench.engine.advance(to: 4_200_000)
+        bench.player.saveProgress()
+        #expect(bench.stored(PlayerBench.link.uri)?.positionMs == 4_200_000)
+
+        bench.engine.advance(to: 4_230_000)
+        bench.engine.isPlaying = false
+        bench.engine.emit(.ended)
+
+        #expect(await eventually { bench.state.problem != nil })
+        #expect(bench.state.problem == PlaybackProblem(message: TextRef("player_error_generic"), code: 1000))
+        #expect(bench.state.status != .ended)
+        #expect(bench.state.positionMs == 4_230_000)
+        // O ponto guardado é o de onde o vídeo parou (e não o início, como num vídeo que terminou).
+        #expect(bench.stored(PlayerBench.link.uri)?.positionMs == 4_230_000)
+        #expect(bench.stored(PlayerBench.link.uri)?.resumePositionMs == 4_230_000)
+
+        bench.engine.forgetCalls()
+        bench.player.retry()
+        #expect(bench.engine.calls == ["open \(PlayerBench.link.uri) @4230000"])
+    }
+
+    @Test("\"fim\" longe do fim: a mensagem é a que a conferência achar (sem conexão, recusa do servidor)")
+    func endedInTheMiddleReasons() async {
+        let offline = PlayerBench()
+        offline.diagnosis.willAnswer(.network)
+        offline.play(durationMs: 600_000)
+        offline.engine.advance(to: 95_000)
+        offline.engine.emit(.ended)
+        #expect(await eventually { offline.state.problem != nil })
+        #expect(offline.state.problem?.code == 2001)
+
+        let refused = PlayerBench()
+        refused.diagnosis.willAnswer(.http(status: 403))
+        refused.play(durationMs: 600_000)
+        refused.engine.advance(to: 95_000)
+        refused.engine.emit(.ended)
+        #expect(await eventually { refused.state.problem != nil })
+        #expect(refused.state.problem == PlaybackProblem(message: TextRef("player_error_http", ["403"]), code: 2004))
+
+        // Arquivo cortado: ele está lá, mas acaba antes da hora.
+        let cut = PlayerBench(PlayerBench.file)
+        cut.diagnosis.willAnswer(.format)
+        cut.play(durationMs: 600_000)
+        cut.engine.advance(to: 95_000)
+        cut.engine.emit(.ended)
+        #expect(await eventually { cut.state.problem != nil })
+        #expect(cut.state.problem?.code == 1000)
+    }
+
+    @Test("\"fim\" nos últimos 5 segundos (ou 2%) é o fim de verdade; sem duração conhecida, também")
+    func endedNearTheEnd() {
+        // 2 horas: os últimos 2% são 2 minutos e 24 segundos.
+        let long = PlayerBench()
+        long.play(durationMs: 7_200_000)
+        long.engine.advance(to: 7_060_000)
+        long.engine.emit(.ended)
+        #expect(long.state.status == .ended)
+        #expect(long.state.problem == nil)
+        #expect(long.diagnosis.asked.isEmpty)
+
+        // 20 segundos: os últimos 5 segundos.
+        let short = PlayerBench()
+        short.play(durationMs: 20_000)
+        short.engine.advance(to: 15_250)
+        short.engine.emit(.ended)
+        #expect(short.state.status == .ended)
+
+        // Transmissão sem duração: não há como saber se foi no meio.
+        let live = PlayerBench()
+        live.play(durationMs: 0)
+        live.run(ticks: 4)
+        live.engine.emit(.ended)
+        #expect(live.state.status == .ended)
+        #expect(live.diagnosis.asked.isEmpty)
+    }
+
+    @Test("erro seguido de \"fim\": vale o erro, e tentar de novo continua do ponto em que estava")
+    func errorThenEnded() async {
+        let bench = PlayerBench()
+        bench.diagnosis.willAnswer(.network, after: 0.05)
+        bench.play(durationMs: 7_200_000)
+        bench.engine.advance(to: 4_200_000)
+
+        bench.engine.emit(.failed)
+        bench.engine.emit(.ended)
+
+        #expect(bench.state.status != .ended)
+        #expect(bench.state.positionMs == 4_200_000)
+        #expect(await eventually { bench.state.problem != nil })
+        #expect(bench.state.problem?.code == 2001)
+        #expect(bench.state.positionMs == 4_200_000)
+        #expect(bench.stored(PlayerBench.link.uri)?.positionMs == 4_200_000)
+        #expect(bench.diagnosis.asked.count == 1)
+
+        bench.engine.forgetCalls()
+        bench.player.retry()
+        #expect(bench.engine.calls == ["open \(PlayerBench.link.uri) @4200000"])
+    }
+
+    @Test("erro depois do fim de verdade: o vídeo já acabou, nada muda")
+    func errorAfterTheEnd() async {
+        let bench = PlayerBench()
+        bench.play(durationMs: 60_000)
+        bench.engine.advance(to: 59_900)
+        bench.engine.emit(.ended)
+        #expect(bench.state.status == .ended)
+
+        bench.engine.emit(.failed)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        #expect(bench.state.status == .ended)
+        #expect(bench.state.problem == nil)
+        #expect(bench.diagnosis.asked.isEmpty)
     }
 
     @Test("tentar de novo limpa a mensagem e abre o vídeo outra vez, do ponto em que estava")

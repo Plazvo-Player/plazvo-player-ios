@@ -2,8 +2,9 @@ import PlazvoCore
 import SwiftUI
 import UIKit
 
-/// Abrir link de vídeo: um campo para colar ou digitar o endereço. Abre já pronto para digitar,
-/// com o último endereço tentado, para corrigir sem digitar tudo de novo.
+/// Abrir link de vídeo: um campo para colar ou digitar o endereço. Abre já pronto para digitar.
+/// Se o último endereço tentado não chegou a tocar, ele volta ao campo, para corrigir sem digitar
+/// tudo de novo; o que tocou não volta (está na lista de recentes, sem o endereço à mostra).
 struct OpenLinkScreen: View {
     @ObservedObject var model: AppModel
 
@@ -41,7 +42,12 @@ struct OpenLinkScreen: View {
         .padding(.horizontal, 20)
         .frame(maxWidth: 560)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .onChange(of: text) { _ in
+        .onChange(of: text) { changed in
+            // Um texto enorme colado por engano não fica no campo (travaria a tela).
+            if changed.utf8.count > VideoLink.maxLength {
+                text = VideoLink.fitted(changed)
+                return
+            }
             // Mexeu no campo: o aviso de endereço errado some.
             if model.state.linkInvalid { model.app.linkEdited() }
         }
@@ -58,7 +64,9 @@ struct OpenLinkScreen: View {
 
     /// Botão Colar: põe no campo o texto que está na área de transferência.
     private func paste() {
-        guard let pasted = UIPasteboard.general.string?.trimmingCharacters(in: .whitespacesAndNewlines), !pasted.isEmpty else { return }
+        guard let copied = UIPasteboard.general.string else { return }
+        let pasted = VideoLink.fitted(copied).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !pasted.isEmpty else { return }
         text = pasted
         focused = true
     }
@@ -85,8 +93,8 @@ private struct LinkField: View {
                     ZStack(alignment: .topLeading) {
                         Rectangle()
                         if raised {
-                            name(raised: true, color: Color.black)
-                                .background(Color.black)
+                            // O vão tem o tamanho e o lugar do nome (com a folga dos lados dele).
+                            name(raised: true, color: Color.black, patch: Color.black)
                                 .blendMode(.destinationOut)
                         }
                     }
@@ -134,11 +142,14 @@ private struct LinkField: View {
     }
 
     /// O nome do campo: dentro dele, em letra grande, ou em cima da borda, em letra pequena.
-    private func name(raised: Bool, color: Color) -> some View {
+    /// - Parameter patch: a cor de fundo do nome (só no molde do vão da borda). Entra antes do
+    ///   deslocamento, para ir junto com o nome.
+    private func name(raised: Bool, color: Color, patch: Color = Color.clear) -> some View {
         Text(t("link_field_label"))
             .style(raised ? .bodySmall : .bodyLarge)
             .foregroundColor(color)
             .padding(.horizontal, raised ? 4 : 0)
+            .background(patch)
             .offset(x: raised ? 12 : 16, y: raised ? -8 : 16)
     }
 }

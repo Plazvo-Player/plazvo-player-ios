@@ -9,6 +9,15 @@ fi
 echo "XcodeGen: $(xcodegen --version 2>&1 | tail -n 1)" | tee -a resultado/resumo.txt
 xcodegen generate
 
+# Regra do projeto: o motor de vídeo não escreve registros (o endereço de um vídeo pode levar
+# usuário e senha). O app não pode ligar nenhum registro dele.
+if grep -R -n --include="*.swift" -E "debugLogging|setLoggers|\.loggers|--syslog|--file-logging|--logfile|--verbose|VLCParams" App > /dev/null; then
+  echo "Conferência dos registros do motor de vídeo: FALHOU, o app liga um registro do motor" | tee -a resultado/resumo.txt
+  grep -R -n --include="*.swift" -E "debugLogging|setLoggers|\.loggers|--syslog|--file-logging|--logfile|--verbose|VLCParams" App | cut -c1-160
+  exit 1
+fi
+echo "Conferência dos registros do motor de vídeo: o app não liga nenhum registro do motor" | tee -a resultado/resumo.txt
+
 set +e
 xcodebuild \
   -project PlazvoPlayer.xcodeproj -scheme PlazvoPlayer -configuration Debug \
@@ -41,6 +50,7 @@ echo "Conferência do servidor: o app do simulador não tem o endereço api.plaz
 
 # O app do aparelho (o que fala com o servidor de verdade) também tem de compilar. Sai sem
 # assinatura: não dá para instalar; serve para provar que o código do aparelho compila.
+# (O pacote de instalar é montado à parte, em ci/pacote.sh.)
 set +e
 xcodebuild \
   -project PlazvoPlayer.xcodeproj -scheme PlazvoPlayer -configuration Debug \

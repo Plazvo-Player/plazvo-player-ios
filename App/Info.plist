@@ -9,12 +9,25 @@
 	</dict>
 	<!-- "Abrir link de vídeo" aceita endereços http (sem "s"), comuns em vídeo. O reprodutor toca
 	     esses endereços de qualquer jeito; esta permissão serve para o app conferir o que o
-	     servidor respondeu quando um vídeo não abre (e mostrar o número do erro). A conversa do
-	     app com o servidor do Plazvo é sempre por https. -->
+	     servidor respondeu quando um vídeo não abre (e mostrar o número do erro).
+	     A conversa do app com o servidor do Plazvo fica de fora dessa permissão: para o
+	     plazvo.com o sistema continua exigindo https, com TLS 1.2 ou mais novo. -->
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>plazvo.com</key>
+			<dict>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<false/>
+				<key>NSExceptionMinimumTLSVersion</key>
+				<string>TLSv1.2</string>
+			</dict>
+		</dict>
 	</dict>
 	<!-- O que o iPhone diz ao perguntar se o app pode falar com a rede local (link de um vídeo
 	     que está na rede da casa do usuário). O texto de cada idioma fica em InfoPlist.strings. -->

@@ -38,6 +38,20 @@ public struct PlaybackCheck: PlaybackDiagnosis {
         }
     }
 
+    /// Como a conferência fala com o endereço: sem guardar nada do que vem (nem cookies, nem
+    /// cópia das respostas) e sem mandar cookies.
+    static func sessionConfiguration() -> URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = PlaybackCheck.timeout
+        configuration.timeoutIntervalForResource = PlaybackCheck.timeout * 2
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        configuration.urlCache = nil
+        configuration.httpShouldSetCookies = false
+        configuration.httpCookieAcceptPolicy = .never
+        configuration.httpCookieStorage = nil
+        return configuration
+    }
+
     private func linkFailure(_ address: String) async -> PlaybackFailure {
         guard let url = URL(string: address), let scheme = url.scheme?.lowercased(),
               scheme == "http" || scheme == "https"
@@ -48,23 +62,20 @@ public struct PlaybackCheck: PlaybackDiagnosis {
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.httpShouldHandleCookies = false
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
-        // O mesmo pedido do motor de vídeo: o arquivo desde o começo.
+        // Como o motor de vídeo pede: o arquivo desde o começo.
         request.setValue("bytes=0-", forHTTPHeaderField: "Range")
 
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.timeoutIntervalForRequest = PlaybackCheck.timeout
-        configuration.timeoutIntervalForResource = PlaybackCheck.timeout * 2
-        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
-        configuration.urlCache = nil
-        configuration.httpShouldSetCookies = false
-        configuration.httpCookieAcceptPolicy = .never
+        let configuration = PlaybackCheck.sessionConfiguration()
         configure?(configuration)
 
-        let status: Int? = await withCheckedContinuation { continuation in
-            let delegate = AnswerOnly(continuation)
-            let session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
-            delegate.session = session
-            session.dataTask(with: request).resume()
+        // Se quem pediu desiste (o vídeo foi fechado), o pedido ao endereço é cancelado na hora.
+        let answer = AnswerOnly()
+        let status: Int? = await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                answer.start(request, configuration: configuration, continuation: continuation)
+            }
+        } onCancel: {
+            answer.cancel()
         }
         guard let status else { return .network }
         if status >= 400 { return .http(status: status) }
@@ -78,15 +89,34 @@ public struct PlaybackCheck: PlaybackDiagnosis {
 private final class AnswerOnly: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     private let lock = NSLock()
     private var continuation: CheckedContinuation<Int?, Never>?
-    var session: URLSession?
+    private var session: URLSession?
+    private var finished = false
 
-    init(_ continuation: CheckedContinuation<Int?, Never>) {
+    /// Faz o pedido. O resultado sai pela `continuation`, uma vez só.
+    func start(_ request: URLRequest, configuration: URLSessionConfiguration, continuation: CheckedContinuation<Int?, Never>) {
+        lock.lock()
+        if finished {
+            // Quem pediu já tinha desistido: o pedido nem sai.
+            lock.unlock()
+            continuation.resume(returning: nil)
+            return
+        }
+        let session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
         self.continuation = continuation
+        self.session = session
+        lock.unlock()
+        session.dataTask(with: request).resume()
+    }
+
+    /// Quem pediu desistiu: o pedido é cancelado.
+    func cancel() {
+        finish(nil)
     }
 
     /// Entrega o resultado uma vez só e encerra a sessão.
     private func finish(_ status: Int?) {
         lock.lock()
+        finished = true
         let waiting = continuation
         continuation = nil
         let used = session

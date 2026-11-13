@@ -105,6 +105,16 @@ public final class PlayerController {
     }
 
     private var phase = Phase.opening
+
+    /// O motor já abriu o vídeo desta abertura. Antes disso ele não recebe pedido de pausar nem
+    /// de continuar: uma pausa no meio da abertura faz o motor desistir dela, e a tela acabaria
+    /// mostrando uma falha que não houve.
+    private var engineOpened: Bool {
+        switch phase {
+        case .starting, .ready: return true
+        case .opening, .buffering, .failed: return false
+        }
+    }
     /// O que o usuário quer: o vídeo rodando ou parado.
     private var wantsPlay = true
     private var ended = false
@@ -122,6 +132,8 @@ public final class PlayerController {
     /// O ponto do último aviso de tempo desta abertura.
     private var lastEventPositionMs: Int64?
     private var listedInRecents = false
+    /// O vídeo chegou a tocar alguma coisa, em qualquer abertura.
+    public private(set) var hasPlayed = false
     /// O vídeo chegou a abrir (o motor achou vídeo no endereço).
     private var everOpened = false
     /// O vídeo informa o tempo (ele já andou alguma vez).
@@ -190,7 +202,8 @@ public final class PlayerController {
         guard started, !closed else { return }
         if wantsPlay, !ended, state.problem == nil {
             wantsPlay = false
-            engine.pause()
+            // Com o vídeo ainda abrindo, o pedido fica guardado e vale quando ele abrir.
+            if engineOpened { engine.pause() }
         }
         saveProgress()
         update { $0.controlsVisible = true }
@@ -266,6 +279,7 @@ public final class PlayerController {
         case .videoSize(let width, let height):
             guard width > 0, height > 0 else { return }
             sawPicture = true
+            if everOpened { markPlayed() }
             update { $0.portraitVideo = height > width }
         case .tracksChanged:
             update { self.readTracks(into: &$0) }
@@ -285,11 +299,7 @@ public final class PlayerController {
             return
         }
         everOpened = true
-        if keptInRecents, !listedInRecents {
-            // Só entra na lista de recentes o que realmente abriu.
-            listedInRecents = true
-            recents.markOpened(request)
-        }
+        if sawPicture { markPlayed() }
         update {
             $0.seekable = self.engine.isSeekable
             $0.durationMs = max(self.engine.durationMs, 0)
@@ -297,6 +307,16 @@ public final class PlayerController {
         }
         // Pausado antes de abrir: o pedido vale agora.
         if !wantsPlay { engine.pause() }
+    }
+
+    /// O vídeo mostrou alguma coisa (apareceu imagem, o tempo andou, ou passou o instante de
+    /// espera do vídeo que não informa o tempo): só então ele entra na lista de recentes. Um
+    /// endereço que abre e não toca nada (uma lista de vídeos, uma página) não entra.
+    private func markPlayed() {
+        hasPlayed = true
+        guard keptInRecents, !listedInRecents else { return }
+        listedInRecents = true
+        recents.markOpened(request)
     }
 
     private func timeChanged(positionMs: Int64, durationMs: Int64) {
@@ -314,6 +334,7 @@ public final class PlayerController {
                 break
             }
             if case .starting = phase { phase = .ready }
+            markPlayed()
             stillTicks = 0
             stalled = false
         }
@@ -327,9 +348,18 @@ public final class PlayerController {
 
     private func reachedEnd() {
         guard !ended, state.problem == nil else { return }
+        // Erro seguido de "fim": vale o erro.
+        if case .failed = phase { return }
         // "Fim" sem nunca ter mostrado nada: o endereço não era um vídeo.
         guard everOpened, timeMoves || sawPicture || state.durationMs > 0 else {
             failed()
+            return
+        }
+        // "Fim" longe do fim de um vídeo de duração conhecida: o vídeo parou de chegar (a conexão
+        // caiu, o arquivo está cortado). Não conta como assistido: o ponto fica guardado e a tela
+        // oferece tentar de novo dali.
+        if state.durationMs > 0, !RecentMedia.isNearEnd(positionMs: state.positionMs, durationMs: state.durationMs) {
+            failed(interrupted: true)
             return
         }
         ended = true
@@ -342,18 +372,24 @@ public final class PlayerController {
     }
 
     /// O motor só diz que deu erro: o motivo é conferido à parte, e a tela espera por ele.
-    private func failed() {
+    /// - Parameter interrupted: o vídeo estava rodando e parou de chegar no meio.
+    private func failed(interrupted: Bool = false) {
         if case .failed = phase { return }
-        guard state.problem == nil else { return }
+        // Erro depois do fim de verdade: o vídeo já acabou, não há o que avisar.
+        guard !ended, state.problem == nil else { return }
         phase = .failed
         stalled = false
+        // O ponto em que parou fica guardado, para continuar dali.
+        saveProgress()
         update { _ in }
         let current = opening
         let kind = request.kind
         let address = self.address ?? ""
         let diagnosis = self.diagnosis
         checking = Task { [weak self] in
-            let failure = await diagnosis.failure(of: kind, address: address)
+            var failure = await diagnosis.failure(of: kind, address: address)
+            // O formato não é o problema de um vídeo que já estava rodando.
+            if interrupted, failure == .format { failure = .unknown }
             guard !Task.isCancelled, let self, !self.closed, self.opening == current else { return }
             if case .notFound = failure {
                 // O arquivo sumiu: na próxima tentativa o acesso é pedido de novo.
@@ -384,12 +420,11 @@ public final class PlayerController {
             return
         }
         wantsPlay.toggle()
-        if wantsPlay {
-            engine.play()
-        } else {
-            engine.pause()
-            saveProgress()
+        // Com o vídeo ainda abrindo, o pedido fica guardado e vale quando ele abrir.
+        if engineOpened {
+            if wantsPlay { engine.play() } else { engine.pause() }
         }
+        if !wantsPlay { saveProgress() }
         mismatchedTicks = 0
         stillTicks = 0
         stalled = false
@@ -486,6 +521,7 @@ public final class PlayerController {
             if wantsPlay, ticks + 1 >= PlayerController.startTicks {
                 phase = .ready
                 isReady = true
+                markPlayed()
             } else if wantsPlay {
                 phase = .starting(ticks: ticks + 1)
             }

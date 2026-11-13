@@ -20,7 +20,7 @@ struct PlaybackCheckTests {
 
     // MARK: - Link
 
-    @Test("link: pede o começo do vídeo, apresentando-se como o app, sem cookies")
+    @Test("link: pede o começo do vídeo, apresentando-se como o app")
     func request() async throws {
         server.willAnswer(.response(status: 404, body: ""))
 
@@ -33,8 +33,44 @@ struct PlaybackCheckTests {
         #expect(request.url.query == "token=abc")
         #expect(request.headers["User-Agent"] == "PlazvoPlayer/0.2.0 (iOS 18.1)")
         #expect(request.headers["Range"] == "bytes=0-")
-        #expect(request.headers["Cookie"] == nil)
         #expect(request.body.isEmpty)
+    }
+
+    @Test("link: a conferência não guarda nem manda cookies, e não guarda cópia das respostas")
+    func keepsNothing() {
+        let configuration = PlaybackCheck.sessionConfiguration()
+        #expect(configuration.httpCookieAcceptPolicy == .never)
+        #expect(!configuration.httpShouldSetCookies)
+        #expect(configuration.httpCookieStorage == nil)
+        #expect(configuration.urlCache == nil)
+        #expect(configuration.requestCachePolicy == .reloadIgnoringLocalCacheData)
+        #expect(configuration.timeoutIntervalForRequest == PlaybackCheck.timeout)
+    }
+
+    @Test("link: quem pediu a conferência desistiu (o vídeo foi fechado): o pedido é cancelado na hora")
+    func cancelled() async {
+        server.willAnswer(.silence)
+        let check = self.check
+        let address = link()
+        let started = Date()
+        let asking = Task { await check.failure(of: .link, address: address) }
+        #expect(await eventually { !self.server.requests.isEmpty })
+
+        asking.cancel()
+
+        // Sem o cancelamento, a resposta só viria no fim do tempo de espera (8 segundos).
+        #expect(await asking.value == .network)
+        #expect(Date().timeIntervalSince(started) < 4)
+
+        // Desistência antes de começar: o pedido nem sai do aparelho.
+        let before = server.requests.count
+        let late = Task {
+            while !Task.isCancelled { await Task.yield() }
+            return await check.failure(of: .link, address: address)
+        }
+        late.cancel()
+        #expect(await late.value == .network)
+        #expect(server.requests.count == before)
     }
 
     @Test("link: o servidor respondeu com um número de erro")
