@@ -314,13 +314,15 @@ public final class AppController {
             update { $0.linkInvalid = true }
             return false
         }
-        lastLink = url
         update {
             $0.linkInvalid = false
             // Depois do vídeo, voltar leva para a tela Mídia (e não para o campo do link).
             $0.screen = .media
         }
         play(PlaybackRequest(kind: .link, uri: url, title: VideoLink.title(url)))
+        // Só depois de abrir: fechar o vídeo que estava aberto (se era este mesmo link, e já tinha
+        // tocado) apaga o último link tentado, e este acaba de ser tentado de novo.
+        lastLink = url
         return true
     }
 

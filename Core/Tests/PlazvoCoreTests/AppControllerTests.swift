@@ -305,6 +305,24 @@ struct AppControllerTests {
         #expect(bench.app.lastLink.isEmpty)
     }
 
+    @Test("o mesmo link aberto de novo por cima dele mesmo: vale a tentativa nova")
+    func sameLinkOpenedOverItself() async throws {
+        await bench.app.start()
+        let link = "http://usuario:senha@exemplo.com:8080/a.mp4"
+        bench.app.openLink(link)
+        try #require(bench.engine).startPlaying()
+
+        // A tentativa nova ainda não tocou: o endereço fica, para corrigir se ela falhar.
+        bench.app.openLink(link)
+        #expect(bench.app.lastLink == link)
+        #expect(bench.engineCount == 2)
+
+        // E some quando ela toca e o vídeo é fechado.
+        try #require(bench.engine).startPlaying()
+        bench.app.closePlayer()
+        #expect(bench.app.lastLink.isEmpty)
+    }
+
     @Test("Limpar os recentes apaga também o último link tentado")
     func clearingRecentsForgetsTheLastLink() async {
         await bench.app.start()
