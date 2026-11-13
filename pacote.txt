@@ -1,0 +1,6 @@
+arquivo=plazvo-player-iphone-v0.2.1-sem-assinatura.ipa
+versao=0.2.1
+numero=3
+bytes=19993659
+sha256=14cd0e89d24e6573aa3dcfa6a43dada5f84e46458f8aa22a1261af4094bbd9ea
+envio=cd131e097ea6505e82a796a4b9d48fe1a17b459f

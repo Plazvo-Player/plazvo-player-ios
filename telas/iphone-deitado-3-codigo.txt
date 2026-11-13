@@ -1,0 +1,11 @@
+cena=codigo
+posicao=deitado-direita
+janela=874x402
+arranjo=wide
+tela=conta
+caixa=codigo
+teclado=sim
+recentes=0
+link-errado=nao
+video=nenhum
+espera=7.1s

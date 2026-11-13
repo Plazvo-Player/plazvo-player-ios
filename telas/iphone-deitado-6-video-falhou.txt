@@ -1,0 +1,16 @@
+cena=video-falhou
+posicao=deitado-direita
+janela=874x402
+arranjo=wide
+tela=midia
+caixa=nenhuma
+teclado=nao
+recentes=0
+link-errado=nao
+video=opening
+ponto=0
+duracao=0
+video-em-pe=nao
+controles=nao
+falha=2001
+espera=3.3s

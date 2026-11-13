@@ -1,0 +1,11 @@
+cena=codigo-errado
+posicao=em-pe
+janela=402x874
+arranjo=compact
+tela=conta
+caixa=codigo
+teclado=sim
+recentes=0
+link-errado=nao
+video=nenhum
+espera=8.4s

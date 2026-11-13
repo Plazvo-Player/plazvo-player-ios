@@ -1,0 +1,11 @@
+cena=link
+posicao=em-pe
+janela=402x874
+arranjo=compact
+tela=link
+caixa=nenhuma
+teclado=sim
+recentes=0
+link-errado=nao
+video=nenhum
+espera=7.8s

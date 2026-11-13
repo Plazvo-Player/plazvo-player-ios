@@ -1,0 +1,12 @@
+cena=midia-recentes
+posicao=deitado-direita
+janela=1210x834
+arranjo=wide
+tela=midia
+caixa=nenhuma
+teclado=nao
+recentes=3
+link-errado=nao
+video=nenhum
+espera=2.6s
+giro-recusado=O modo de janelas atual não permite alterações de programação na orientação da interface.
